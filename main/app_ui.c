@@ -10,29 +10,36 @@ int icon_flag; // 标记现在进入哪个应用 在主界面时为0
 /*********************** 开机界面 ****************************/
 lv_obj_t * lckfb_logo;
 // 设置角度的回调函数
-static void set_angle(void * img, int32_t v)
+static void set_img_opa(void * img, int32_t v)
 {
-    lv_img_set_angle(img, v); // 设置图片的旋转角度
+    lv_obj_set_style_img_opa((lv_obj_t *)img, v, 0);
 }
 // 开机界面
 void lv_gui_start(void)
 {
     lvgl_port_lock(0);
     // 显示logo
-    LV_IMG_DECLARE(image_lckfb_logo);  // 声明图片
+    LV_IMG_DECLARE(img_kidd);  // 声明图片
     lckfb_logo = lv_img_create(lv_scr_act()); // 创建图片对象
-    lv_img_set_src(lckfb_logo, &image_lckfb_logo); // 设置图片对象的图片源
+    lv_img_set_src(lckfb_logo, &img_kidd); // 设置图片对象的图片源
     lv_obj_align(lckfb_logo, LV_ALIGN_CENTER, 0, 0); // 设置图片位置为屏幕正中心
-    lv_img_set_pivot(lckfb_logo, 60, 60); // 设置图片围绕自己的中心位置旋转   
+    uint16_t zoom_w = (320 * 256) / img_kidd.header.w;
+    uint16_t zoom_h = (240 * 256) / img_kidd.header.h;
+    uint16_t zoom = zoom_w < zoom_h ? zoom_w : zoom_h;
+    if(zoom > 256)
+    {
+        zoom = 256;
+    }
+    lv_img_set_zoom(lckfb_logo, zoom);
+    lv_obj_set_style_img_opa(lckfb_logo, LV_OPA_TRANSP, 0);
 
-    // 设置旋转动画
+    // 设置淡入动画
     lv_anim_t a; // 创建动画变量
     lv_anim_init(&a); // 初始化动画变量
     lv_anim_set_var(&a, lckfb_logo); // 动画变量赋值为logo图片
-    lv_anim_set_exec_cb(&a, set_angle); // 创建设置角度的回调函数
-    lv_anim_set_values(&a, 0, 3600); // 设置动画旋转角度的开始值和结尾值
-    lv_anim_set_time(&a, 200); // 设置转一圈的周期是200毫秒
-    lv_anim_set_repeat_count(&a, 5); // 设置旋转5次
+    lv_anim_set_exec_cb(&a, set_img_opa); // 创建透明度回调函数
+    lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER); // 设置透明度的开始值和结尾值
+    lv_anim_set_time(&a, 1200); // 设置淡入时间
     lv_anim_start(&a); // 动画开始
     lvgl_port_unlock();
 }
@@ -45,7 +52,12 @@ void lv_main_page(void)
 {
     lvgl_port_lock(0);
 
-    lv_obj_del(lckfb_logo); // 删除开机logo
+    if(lckfb_logo != NULL)
+    {
+        lv_anim_del(lckfb_logo, NULL); // 删除开机图片动画
+        lv_obj_del(lckfb_logo); // 删除开机图片
+        lckfb_logo = NULL;
+    }
     // 创建主界面基本对象
     lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x000000), 0); // 修改背景为黑色
 

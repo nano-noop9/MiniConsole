@@ -1,5 +1,6 @@
 idf_component_register(SRCS "esp32_s3_szp.c" "main.c" "app_ui.c" "app_ui_apps.c" "app_ui_music.c" "app_ui_wifi.c"
                        SRCS "assets/image_lckfb_logo.c"
+                       SRCS "assets/img_kidd.c"
                        SRCS "assets/img_att_icon.c"
                        SRCS "assets/img_btset_icon.c"
                        SRCS "assets/img_camera_icon.c"

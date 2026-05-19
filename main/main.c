@@ -1,4 +1,4 @@
-#include <stdio.h>
+    #include <stdio.h>
 #include "esp32_s3_szp.h"
 #include "app_ui.h"
 #include "nvs_flash.h"
