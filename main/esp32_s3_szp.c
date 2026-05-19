@@ -779,27 +779,7 @@ esp_err_t bsp_sdcard_mount(void)
 
 esp_err_t bsp_sdcard_unmount(void)
 {
-    if(sdcard_mount_count <= 0 || sdmmc_card == NULL)
-    {
-        sdcard_mount_count = 0;
-        sdmmc_card = NULL;
-        return ESP_OK;
-    }
-
-    sdcard_mount_count--;
-    if(sdcard_mount_count > 0)
-    {
-        ESP_LOGI(TAG, "SD card still in use, count=%d", sdcard_mount_count);
-        return ESP_OK;
-    }
-
-    esp_err_t ret = esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
-    if(ret == ESP_OK)
-    {
-        sdmmc_card = NULL;
-    }
-
-    return ret;
+    return esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
 }
 /**********************    SD卡 ↑  ************************/
 /**********************************************************/

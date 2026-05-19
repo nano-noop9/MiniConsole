@@ -176,4 +176,3 @@ void lv_main_page(void)
 
     lvgl_port_unlock();
 }
-
