@@ -3,9 +3,29 @@
 LV_FONT_DECLARE(font_alipuhui20);
 
 lv_obj_t * main_obj; // 主界面
+lv_obj_t * app_obj; // 应用界面
 lv_obj_t * main_text_label; // 主界面 欢迎语
-lv_obj_t * icon_in_obj; // 应用界面
+lv_obj_t * icon_in_obj; // 应用子界面
 int icon_flag; // 标记现在进入哪个应用 在主界面时为0
+
+void lv_app_page(void);
+
+static void app_event_handler(lv_event_t * e)
+{
+    (void)e;
+    lv_app_page();
+}
+
+static void app_back_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if(code == LV_EVENT_CLICKED) 
+    {
+        lv_obj_del(app_obj); // 删除应用界面
+        app_obj = NULL;
+    }
+}
 
 /*********************** 开机界面 ****************************/
 lv_obj_t * lckfb_logo;
@@ -102,8 +122,106 @@ void lv_main_page(void)
     lv_style_set_width(&btn_style, 80);  
     lv_style_set_height(&btn_style, 80); 
 
+
+    // 创建时钟应用图标
+    lv_obj_t *icon4 = lv_btn_create(main_obj);
+    lv_obj_add_style(icon4, &btn_style, 0);
+    lv_obj_set_style_bg_color(icon4, lv_color_hex(0xd8b010), 0);
+    lv_obj_set_pos(icon4, 15, 147);
+    lv_obj_add_event_cb(icon4, camera_event_handler, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * img4 = lv_img_create(icon4);
+    LV_IMG_DECLARE(Clock_img);
+    lv_img_set_src(img4, &Clock_img);
+    lv_obj_align(img4, LV_ALIGN_CENTER, 0, 0);
+
+    // 创建天气应用图标
+    lv_obj_t *icon5 = lv_btn_create(main_obj);
+    lv_obj_add_style(icon5, &btn_style, 0);
+    lv_obj_set_style_bg_color(icon5, lv_color_hex(0xcd5c5c), 0);
+    lv_obj_set_pos(icon5, 120, 147);
+    lv_obj_add_event_cb(icon5, wifiset_event_handler, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * img5 = lv_img_create(icon5);
+    LV_IMG_DECLARE(weather_img);
+    lv_img_set_src(img5, &weather_img);
+    lv_obj_align(img5, LV_ALIGN_CENTER, 0, 0);
+
+    // 创建app应用图标
+    lv_obj_t *icon6 = lv_btn_create(main_obj);
+    lv_obj_add_style(icon6, &btn_style, 0);
+    lv_obj_set_style_bg_color(icon6, lv_color_hex(0xb87fa8), 0);
+    lv_obj_set_pos(icon6, 225, 147);
+    lv_obj_add_event_cb(icon6, app_event_handler, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * img6 = lv_img_create(icon6);
+    LV_IMG_DECLARE(app_img);
+    lv_img_set_src(img6, &app_img);
+    lv_obj_align(img6, LV_ALIGN_CENTER, 0, 0);
+
+    lvgl_port_unlock();
+}
+
+
+
+void lv_app_page(void)
+{
+    lvgl_port_lock(0);
+
+    // 创建主界面基本对象
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0x000000), 0); // 修改背景为黑色
+
+    static lv_style_t style;
+    lv_style_init(&style);
+    lv_style_set_radius(&style, 10);
+    lv_style_set_bg_opa( &style, LV_OPA_COVER );
+    lv_style_set_bg_color(&style, lv_color_hex(0x00BFFF));
+    lv_style_set_bg_grad_color( &style, lv_color_hex( 0x00BF00 ) );
+    lv_style_set_bg_grad_dir( &style, LV_GRAD_DIR_VER );
+    lv_style_set_border_width(&style, 0);
+    lv_style_set_pad_all(&style, 0);
+    lv_style_set_width(&style, 320);
+    lv_style_set_height(&style, 240);
+
+    app_obj = lv_obj_create(lv_scr_act());
+    lv_obj_add_style(app_obj, &style, 0);
+
+    // 创建后退按钮
+    lv_obj_t *app_back = lv_btn_create(app_obj);
+    lv_obj_align(app_back, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_size(app_back, 60, 30);
+    lv_obj_set_style_border_width(app_back, 0, 0); // 设置边框宽度
+    lv_obj_set_style_pad_all(app_back, 0, 0);  // 设置间隙
+    lv_obj_set_style_bg_opa(app_back, LV_OPA_TRANSP, LV_PART_MAIN); // 背景透明
+    lv_obj_set_style_shadow_opa(app_back, LV_OPA_TRANSP, LV_PART_MAIN); // 阴影透明
+    lv_obj_add_event_cb(app_back, app_back_cb, LV_EVENT_CLICKED, NULL); // 添加按键处理函数
+
+    lv_obj_t *label_back = lv_label_create(app_back); 
+    lv_label_set_text(label_back, LV_SYMBOL_LEFT);  // 按键上显示左箭头符号
+    lv_obj_set_style_text_font(label_back, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label_back, lv_color_hex(0xffffff), 0); 
+    lv_obj_align(label_back, LV_ALIGN_CENTER, -10, 0);
+
+    // 显示右上角符号
+    lv_obj_t * sylbom_label = lv_label_create(app_obj);
+    lv_obj_set_style_text_font(sylbom_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(sylbom_label, lv_color_hex(0xffffff), 0);
+    lv_label_set_text(sylbom_label, LV_SYMBOL_BLUETOOTH" "LV_SYMBOL_WIFI);  // 显示蓝牙和wifi图标
+    lv_obj_align_to(sylbom_label, app_obj, LV_ALIGN_TOP_RIGHT, -10, 10);
+
+    // 设置应用图标style
+    static lv_style_t btn_style;
+    lv_style_init(&btn_style);
+    lv_style_set_radius(&btn_style, 16);
+    lv_style_set_bg_opa( &btn_style, LV_OPA_COVER );
+    lv_style_set_text_color(&btn_style, lv_color_hex(0xffffff));
+    lv_style_set_border_width(&btn_style, 0);
+    lv_style_set_pad_all(&btn_style, 5);
+    lv_style_set_width(&btn_style, 80);
+    lv_style_set_height(&btn_style, 80);
+
     // 创建第1个应用图标
-    lv_obj_t *icon1 = lv_btn_create(main_obj);
+    lv_obj_t *icon1 = lv_btn_create(app_obj);
     lv_obj_add_style(icon1, &btn_style, 0);
     lv_obj_set_style_bg_color(icon1, lv_color_hex(0x30a830), 0);
     lv_obj_set_pos(icon1, 15, 50);
@@ -115,7 +233,7 @@ void lv_main_page(void)
     lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
     // 创建第2个应用图标
-    lv_obj_t *icon2 = lv_btn_create(main_obj);
+    lv_obj_t *icon2 = lv_btn_create(app_obj);
     lv_obj_add_style(icon2, &btn_style, 0);
     lv_obj_set_style_bg_color(icon2, lv_color_hex(0xf87c30), 0);
     lv_obj_set_pos(icon2, 120, 50);
@@ -127,7 +245,7 @@ void lv_main_page(void)
     lv_obj_align(img2, LV_ALIGN_CENTER, 0, 0);
 
     // 创建第3个应用图标
-    lv_obj_t *icon3 = lv_btn_create(main_obj);
+    lv_obj_t *icon3 = lv_btn_create(app_obj);
     lv_obj_add_style(icon3, &btn_style, 0);
     lv_obj_set_style_bg_color(icon3, lv_color_hex(0x008b8b), 0);
     lv_obj_set_pos(icon3, 225, 50);
@@ -139,7 +257,7 @@ void lv_main_page(void)
     lv_obj_align(img3, LV_ALIGN_CENTER, 0, 0);
 
     // 创建第4个应用图标
-    lv_obj_t *icon4 = lv_btn_create(main_obj);
+    lv_obj_t *icon4 = lv_btn_create(app_obj);
     lv_obj_add_style(icon4, &btn_style, 0);
     lv_obj_set_style_bg_color(icon4, lv_color_hex(0xd8b010), 0);
     lv_obj_set_pos(icon4, 15, 147);
@@ -151,7 +269,7 @@ void lv_main_page(void)
     lv_obj_align(img4, LV_ALIGN_CENTER, 0, 0);
 
     // 创建第5个应用图标
-    lv_obj_t *icon5 = lv_btn_create(main_obj);
+    lv_obj_t *icon5 = lv_btn_create(app_obj);
     lv_obj_add_style(icon5, &btn_style, 0);
     lv_obj_set_style_bg_color(icon5, lv_color_hex(0xcd5c5c), 0);
     lv_obj_set_pos(icon5, 120, 147);
@@ -163,7 +281,7 @@ void lv_main_page(void)
     lv_obj_align(img5, LV_ALIGN_CENTER, 0, 0);
 
     // 创建第6个应用图标
-    lv_obj_t *icon6 = lv_btn_create(main_obj);
+    lv_obj_t *icon6 = lv_btn_create(app_obj);
     lv_obj_add_style(icon6, &btn_style, 0);
     lv_obj_set_style_bg_color(icon6, lv_color_hex(0xb87fa8), 0);
     lv_obj_set_pos(icon6, 225, 147);

@@ -408,14 +408,14 @@ static void get_time_task(void *pvParameters)
     lvgl_port_lock(0);
     lv_obj_del(main_text_label); // 删除主页的欢迎语 
     // 显示年月日
-    date_label = lv_label_create(main_obj);
+    date_label = lv_label_create(app_obj);
     lv_obj_set_style_text_font(date_label, &font_alipuhui20, 0);
     lv_obj_set_style_text_color(date_label, lv_color_hex(0xffffff), 0); 
     lv_label_set_text_fmt(date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
     lv_obj_align(date_label, LV_ALIGN_TOP_LEFT, 10, 5);
 
     // 显示时间  小时:分钟:秒钟
-    time_label = lv_label_create(main_obj);
+    time_label = lv_label_create(app_obj);
     lv_obj_set_style_text_font(time_label, &font_alipuhui20, 0);
     lv_obj_set_style_text_color(time_label, lv_color_hex(0xffffff), 0); 
     lv_label_set_text_fmt(time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);

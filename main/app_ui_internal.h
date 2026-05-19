@@ -6,6 +6,7 @@
 LV_FONT_DECLARE(font_alipuhui20);
 
 extern lv_obj_t * main_obj;
+extern lv_obj_t * app_obj; // 应用界面
 extern lv_obj_t * main_text_label;
 extern lv_obj_t * icon_in_obj;
 extern int icon_flag;
