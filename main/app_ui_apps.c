@@ -398,7 +398,14 @@ static void task_process_sdcard(void *arg)
         // 列出 SD 卡中的文件
         file_path_info.path_index = 0; // 表示当前在根目录
         strcpy(file_path_info.path_now, SD_MOUNT_POINT); // 装入当前路径
-        list_sdcard_files(file_path_info.path_now); // 列出当前目录文件
+        ret = list_sdcard_files(file_path_info.path_now);
+        if(ret != ESP_OK)
+        {
+            lvgl_port_lock(0);
+            lv_label_set_text(sdcard_label, "SD卡目录打开失败");
+            lvgl_port_unlock();
+            bsp_sdcard_unmount();
+        }
     }
     
     vTaskDelete(NULL);

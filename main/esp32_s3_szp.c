@@ -771,6 +771,18 @@ esp_err_t bsp_sdcard_mount(void)
     esp_err_t ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &sdmmc_host, &slot_config, &mount_config, &sdmmc_card);
     if(ret == ESP_OK)
     {
+        if(sdmmc_card == NULL || sdmmc_card->csd.sector_size == 0 || sdmmc_card->csd.capacity == 0)
+        {
+            ESP_LOGE(TAG, "SD card mounted with invalid capacity");
+            if(sdmmc_card != NULL)
+            {
+                esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
+                sdmmc_card = NULL;
+            }
+            sdcard_mount_count = 0;
+            return ESP_FAIL;
+        }
+
         sdcard_mount_count = 1;
     }
 
@@ -779,7 +791,31 @@ esp_err_t bsp_sdcard_mount(void)
 
 esp_err_t bsp_sdcard_unmount(void)
 {
-    return esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
+    if(sdcard_mount_count <= 0 || sdmmc_card == NULL)
+    {
+        sdcard_mount_count = 0;
+        sdmmc_card = NULL;
+        return ESP_OK;
+    }
+
+    sdcard_mount_count--;
+    if(sdcard_mount_count > 0)
+    {
+        ESP_LOGI(TAG, "SD card still in use, count=%d", sdcard_mount_count);
+        return ESP_OK;
+    }
+
+    esp_err_t ret = esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
+    if(ret == ESP_OK)
+    {
+        sdmmc_card = NULL;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to unmount SD card: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
 }
 /**********************    SD卡 ↑  ************************/
 /**********************************************************/
