@@ -52,6 +52,7 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
+    bsp_user_key_init();  // IO0用户按键初始化
 
     bsp_i2c_init();  // I2C初始化
     pca9557_init();  // IO扩展芯片初始化

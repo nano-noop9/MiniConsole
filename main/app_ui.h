@@ -13,6 +13,7 @@ void lv_main_page(void);
 /*********************** 音乐播放器 ****************************/
 void mp3_player_init(void);
 void music_ui(void);
+void music_play_pause_toggle(void);
 
 void ai_gui_in(void);
 void ai_gui_out(void);

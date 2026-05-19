@@ -1,10 +1,83 @@
 #include <stdio.h>
 #include "esp32_s3_szp.h"
+#include "app_ui.h"
 
 static const char *TAG = "esp32_s3_szp";
 
 // 全局I2C端口号
 static int i2c_port = BSP_I2C_NUM;
+
+#define USER_KEY_POLL_MS          20
+#define USER_KEY_DEBOUNCE_COUNT   2
+#define USER_KEY_TASK_STACK_SIZE  2048
+
+static bool user_key_task_created = false;
+
+static void user_key_task(void *pvParameters)
+{
+    (void)pvParameters;
+
+    bool key_handled = false;
+    uint8_t low_count = 0;
+
+    while(true)
+    {
+        int level = gpio_get_level(BSP_USER_KEY_GPIO);
+        if(level == 0)
+        {
+            if(low_count < USER_KEY_DEBOUNCE_COUNT)
+            {
+                low_count++;
+            }
+
+            if(low_count >= USER_KEY_DEBOUNCE_COUNT && !key_handled)
+            {
+                music_play_pause_toggle();
+                key_handled = true;
+            }
+        }
+        else
+        {
+            low_count = 0;
+            key_handled = false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(USER_KEY_POLL_MS));
+    }
+}
+
+esp_err_t bsp_user_key_init(void)
+{
+    gpio_config_t key_config = {
+        .pin_bit_mask = 1ULL << BSP_USER_KEY_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+
+    esp_err_t ret = gpio_config(&key_config);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to configure user key: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    if(user_key_task_created)
+    {
+        return ESP_OK;
+    }
+
+    BaseType_t task_ret = xTaskCreate(user_key_task, "user_key_task", USER_KEY_TASK_STACK_SIZE, NULL, 5, NULL);
+    if(task_ret != pdPASS)
+    {
+        ESP_LOGE(TAG, "Failed to create user key task");
+        return ESP_FAIL;
+    }
+
+    user_key_task_created = true;
+    return ESP_OK;
+}
 
 /******************************************************************************/
 /***************************  I2C ↓ *******************************************/
@@ -666,10 +739,18 @@ esp_err_t bsp_spiffs_mount(void)
 /***********************************************************/
 /*********************    SD卡  ↓   *********************/
 sdmmc_card_t *sdmmc_card = NULL;
+static int sdcard_mount_count = 0;
 
 // 挂载SD卡
 esp_err_t bsp_sdcard_mount(void)
 {
+    if(sdcard_mount_count > 0 && sdmmc_card != NULL)
+    {
+        sdcard_mount_count++;
+        ESP_LOGI(TAG, "SD card already mounted, count=%d", sdcard_mount_count);
+        return ESP_OK;
+    }
+
     ESP_LOGI(TAG, "Mounting SD card");
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,  // 加载不成功是否需要格式化
@@ -688,13 +769,37 @@ esp_err_t bsp_sdcard_mount(void)
     ESP_LOGI(TAG, "Mounting filesystem Starting");
 
     esp_err_t ret = esp_vfs_fat_sdmmc_mount(SD_MOUNT_POINT, &sdmmc_host, &slot_config, &mount_config, &sdmmc_card);
+    if(ret == ESP_OK)
+    {
+        sdcard_mount_count = 1;
+    }
 
     return ret;
 }
 
 esp_err_t bsp_sdcard_unmount(void)
 {
-    return esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
+    if(sdcard_mount_count <= 0 || sdmmc_card == NULL)
+    {
+        sdcard_mount_count = 0;
+        sdmmc_card = NULL;
+        return ESP_OK;
+    }
+
+    sdcard_mount_count--;
+    if(sdcard_mount_count > 0)
+    {
+        ESP_LOGI(TAG, "SD card still in use, count=%d", sdcard_mount_count);
+        return ESP_OK;
+    }
+
+    esp_err_t ret = esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, sdmmc_card);
+    if(ret == ESP_OK)
+    {
+        sdmmc_card = NULL;
+    }
+
+    return ret;
 }
 /**********************    SD卡 ↑  ************************/
 /**********************************************************/
@@ -979,7 +1084,8 @@ void power_music_task(void *pvParameters)
     /* Enable the TX channel */
     ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx_chan));
     
-    pa_en(1);  // 打开音频输出
+    //pa_en(1);  // 打开音频输出
+    pa_en(0);
     /* Write music to earphone */
     ret = i2s_channel_write(i2s_tx_chan, data_ptr, music_pcm_end - data_ptr, &bytes_write, portMAX_DELAY);
     if (ret != ESP_OK) {

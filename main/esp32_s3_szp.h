@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_check.h"
 #include "driver/i2c.h"
+#include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "driver/ledc.h"
 #include "freertos/FreeRTOS.h"
@@ -27,6 +28,10 @@
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
+
+#define BSP_USER_KEY_GPIO      (GPIO_NUM_0)
+
+esp_err_t bsp_user_key_init(void);
 
 
 /******************************************************************************/

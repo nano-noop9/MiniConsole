@@ -20,13 +20,13 @@ static size_t music_file_index = 0;
 static bool music_sd_mounted = false;
 static bool music_player_ready = false;
 
-lv_obj_t *music_list;
-lv_obj_t *label_play_pause;
-lv_obj_t *btn_play_pause;
-lv_obj_t *volume_slider;
+lv_obj_t *music_list = NULL;
+lv_obj_t *label_play_pause = NULL;
+lv_obj_t *btn_play_pause = NULL;
+lv_obj_t *volume_slider = NULL;
 
-lv_obj_t *music_title_label;
-lv_obj_t *btn_music_back;
+lv_obj_t *music_title_label = NULL;
+lv_obj_t *btn_music_back = NULL;
 
 static void music_set_play_button_state(bool playing);
 
@@ -172,24 +172,33 @@ static void _audio_player_callback(audio_player_cb_ctx_t *ctx)
 
             ESP_LOGI(TAG, "playing index '%d'", (int)music_file_index);
             play_index(music_file_index);
-            lvgl_port_lock(0);
-            lv_dropdown_set_selected(music_list, music_file_index);
-            lvgl_port_unlock();
+            if(music_list != NULL)
+            {
+                lvgl_port_lock(0);
+                lv_dropdown_set_selected(music_list, music_file_index);
+                lvgl_port_unlock();
+            }
         }
         break;
     case AUDIO_PLAYER_CALLBACK_EVENT_PLAYING:
         ESP_LOGI(TAG, "AUDIO_PLAYER_REQUEST_PLAY");
         pa_en(1);
-        lvgl_port_lock(0);
-        music_set_play_button_state(true);
-        lvgl_port_unlock();
+        if(label_play_pause != NULL || btn_play_pause != NULL)
+        {
+            lvgl_port_lock(0);
+            music_set_play_button_state(true);
+            lvgl_port_unlock();
+        }
         break;
     case AUDIO_PLAYER_CALLBACK_EVENT_PAUSE:
         ESP_LOGI(TAG, "AUDIO_PLAYER_REQUEST_PAUSE");
         pa_en(0);
-        lvgl_port_lock(0);
-        music_set_play_button_state(false);
-        lvgl_port_unlock();
+        if(label_play_pause != NULL || btn_play_pause != NULL)
+        {
+            lvgl_port_lock(0);
+            music_set_play_button_state(false);
+            lvgl_port_unlock();
+        }
         break;
     default:
         break;
@@ -225,6 +234,7 @@ static esp_err_t music_player_init(void)
 // 按钮样式相关定义
 typedef struct {
     lv_style_t style_bg;
+    lv_style_t style_play_bg;
     lv_style_t style_pause_bg;
     lv_style_t style_focus_no_outline;
 } button_style_t;
@@ -246,13 +256,16 @@ static void music_set_play_button_state(bool playing)
     if(btn_play_pause != NULL)
     {
         lv_obj_clear_state(btn_play_pause, LV_STATE_CHECKED);
+        lv_obj_remove_style(btn_play_pause, &ui_button_styles()->style_bg, LV_PART_MAIN);
+        lv_obj_remove_style(btn_play_pause, &ui_button_styles()->style_play_bg, LV_PART_MAIN);
+        lv_obj_remove_style(btn_play_pause, &ui_button_styles()->style_pause_bg, LV_PART_MAIN);
         if(playing)
         {
-            lv_obj_remove_style(btn_play_pause, &ui_button_styles()->style_pause_bg, LV_PART_MAIN);
+            lv_obj_add_style(btn_play_pause, &ui_button_styles()->style_pause_bg, LV_PART_MAIN);
         }
         else
         {
-            lv_obj_remove_style(btn_play_pause, &ui_button_styles()->style_bg, LV_PART_MAIN);
+            lv_obj_add_style(btn_play_pause, &ui_button_styles()->style_play_bg, LV_PART_MAIN);
         }
     }
 }
@@ -269,6 +282,11 @@ static void ui_button_style_init(void)
     lv_style_set_bg_color(&g_btn_styles.style_bg, lv_color_make(255, 255, 255));
     lv_style_set_shadow_width(&g_btn_styles.style_bg, 0);
 
+    lv_style_init(&g_btn_styles.style_play_bg);
+    lv_style_set_bg_opa(&g_btn_styles.style_play_bg, LV_OPA_100);
+    lv_style_set_bg_color(&g_btn_styles.style_play_bg, lv_color_hex(0x3080ff));
+    lv_style_set_shadow_width(&g_btn_styles.style_play_bg, 0); //阴影宽度为 0
+
     lv_style_init(&g_btn_styles.style_pause_bg);
     lv_style_set_bg_opa(&g_btn_styles.style_pause_bg, LV_OPA_100);
     lv_style_set_bg_color(&g_btn_styles.style_pause_bg, lv_color_hex(0xf87c30));
@@ -277,26 +295,7 @@ static void ui_button_style_init(void)
 // 播放暂停按钮事件处理函数
 static void btn_play_pause_cb(lv_event_t *event)
 {
-    if(!music_player_ready || music_file_count == 0)
-    {
-        return;
-    }
-
-    audio_player_state_t state = audio_player_get_state();
-    printf("state=%d\n", state);
-    if(state == AUDIO_PLAYER_STATE_IDLE)
-    {
-        ESP_LOGI(TAG, "playing index '%d'", (int)music_file_index);
-        play_index(music_file_index);
-    }
-    else if(state == AUDIO_PLAYER_STATE_PAUSE)
-    {
-        audio_player_resume();
-    }
-    else if(state == AUDIO_PLAYER_STATE_PLAYING)
-    {
-        audio_player_pause();
-    }
+    music_play_pause_toggle();
 }
 
 // 上一首 下一首按键事件处理函数
@@ -407,6 +406,11 @@ static void music_dropdown_cb(lv_event_t *event)
         {
             lv_obj_set_style_text_font(list, &font_alipuhui20, LV_PART_MAIN);
             lv_obj_set_style_text_font(list, &font_alipuhui20, LV_PART_SELECTED);
+
+            lv_obj_set_style_text_align(list, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+            lv_obj_set_style_pad_left(list, 8, LV_PART_MAIN);
+            lv_obj_set_style_pad_right(list, 8, LV_PART_MAIN);
+
         }
     }
 }
@@ -426,7 +430,35 @@ static void build_file_list(lv_obj_t *music_list)
     {
         lv_dropdown_add_option(music_list, music_names[i], i);
     }
-    lv_dropdown_set_selected(music_list, 0);
+    if(music_file_index >= music_file_count)
+    {
+        music_file_index = 0;
+    }
+    lv_dropdown_set_selected(music_list, music_file_index);
+}
+
+void music_play_pause_toggle(void)
+{
+    if(!music_player_ready || music_file_count == 0)
+    {
+        return;
+    }
+
+    audio_player_state_t state = audio_player_get_state();
+    printf("state=%d\n", state);
+    if(state == AUDIO_PLAYER_STATE_IDLE)
+    {
+        ESP_LOGI(TAG, "playing index '%d'", (int)music_file_index);
+        play_index(music_file_index);
+    }
+    else if(state == AUDIO_PLAYER_STATE_PAUSE)
+    {
+        audio_player_resume();
+    }
+    else if(state == AUDIO_PLAYER_STATE_PLAYING)
+    {
+        audio_player_pause();
+    }
 }
 
 // 播放器界面初始化
@@ -453,6 +485,7 @@ void music_ui(void)
 
     lv_obj_set_user_data(btn_play_pause, (void *) label_play_pause);
     lv_obj_add_event_cb(btn_play_pause, btn_play_pause_cb, LV_EVENT_CLICKED, NULL);
+    music_set_play_button_state(false);
 
     /* 创建上一首控制按键 */
     lv_obj_t *btn_play_prev = lv_btn_create(icon_in_obj);
@@ -519,7 +552,16 @@ void music_ui(void)
     music_list = lv_dropdown_create(icon_in_obj);
     lv_dropdown_clear_options(music_list);
     lv_dropdown_set_options_static(music_list, "扫描中...");
+
+    //lv_obj_set_style_align(music_list, LV_ALIGN_LEFT_MID, LV_PART_MAIN);
+
+    // 设置下拉列表的左右内边距，以增加选项之间的间距
+    lv_obj_set_style_pad_left(music_list, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(music_list, 8, LV_PART_MAIN);
+
     lv_dropdown_set_symbol(music_list, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_opa(music_list, LV_OPA_TRANSP, LV_PART_INDICATOR); // 隐藏下拉图标
+
     lv_obj_set_style_text_font(music_list, &font_alipuhui20, LV_STATE_ANY);
     lv_obj_set_style_text_font(music_list, &font_alipuhui20, LV_PART_MAIN);
     lv_obj_set_style_text_font(music_list, &font_alipuhui20, LV_PART_SELECTED);
@@ -530,6 +572,15 @@ void music_ui(void)
     lv_obj_add_event_cb(music_list, music_list_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     build_file_list(music_list);
+    if(music_player_ready)
+    {
+        audio_player_state_t state = audio_player_get_state();
+        music_set_play_button_state(state == AUDIO_PLAYER_STATE_PLAYING);
+    }
+    else
+    {
+        music_set_play_button_state(false);
+    }
 
     lvgl_port_unlock();
 }
@@ -537,21 +588,14 @@ void music_ui(void)
 // 返回主界面按钮事件处理函数
 static void btn_music_back_cb(lv_event_t * e)
 {
-    if(music_player_ready)
-    {
-        audio_player_stop();
-        audio_player_delete();
-        music_player_ready = false;
-        pa_en(0);
-    }
-
-    if(music_sd_mounted)
-    {
-        bsp_sdcard_unmount();
-        music_sd_mounted = false;
-    }
-
     lv_obj_del(icon_in_obj);
+    icon_in_obj = NULL;
+    music_list = NULL;
+    label_play_pause = NULL;
+    btn_play_pause = NULL;
+    volume_slider = NULL;
+    music_title_label = NULL;
+    btn_music_back = NULL;
     icon_flag = 0;
 }
 
@@ -602,17 +646,27 @@ void music_event_handler(lv_event_t * e)
 
     icon_flag = 2;
 
-    esp_err_t ret = bsp_sdcard_mount();
-    if(ret != ESP_OK)
+    if(music_player_ready)
     {
-        ESP_LOGE(TAG, "Failed to mount filesystem.");
-        lv_label_set_text(music_title_label, "SD卡挂载不成功");
-        music_clear_files();
         music_ui();
         return;
     }
 
-    music_sd_mounted = true;
+    esp_err_t ret = ESP_OK;
+    if(!music_sd_mounted)
+    {
+        ret = bsp_sdcard_mount();
+        if(ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to mount filesystem.");
+            lv_label_set_text(music_title_label, "SD卡挂载不成功");
+            music_clear_files();
+            music_ui();
+            return;
+        }
+
+        music_sd_mounted = true;
+    }
     ret = music_scan_sdcard();
     if(ret != ESP_OK)
     {

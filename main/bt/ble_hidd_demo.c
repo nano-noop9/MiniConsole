@@ -223,6 +223,23 @@ void bt_hid_start(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 }
 
+static void btn3_event_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (sec_conn) {
+        if(code == LV_EVENT_PRESSING) {
+            esp_hidd_send_consumer_value(hid_conn_id, HID_CONSUMER_MUTE, true);
+            ESP_LOGI(HID_DEMO_TAG, "MUTE LV_EVENT_CLICKED");
+        }
+        else if(code == LV_EVENT_RELEASED) {
+            esp_hidd_send_consumer_value(hid_conn_id, HID_CONSUMER_MUTE, false);
+            ESP_LOGI(HID_DEMO_TAG, "MUTE LV_EVENT_RELEASED");
+        }
+    }
+
+}
+
 static void btn2_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -266,8 +283,8 @@ void app_hid_ctrl(void)
 
     lv_obj_t * btn1 = lv_btn_create(icon_in_obj);
     lv_obj_add_event_cb(btn1, btn1_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn1, LV_ALIGN_CENTER, -50, 0);
-    lv_obj_set_size(btn1, 80, 80);
+    lv_obj_align(btn1, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
+    lv_obj_set_size(btn1, 70, 70);
 
     label = lv_label_create(btn1);
     lv_label_set_text(label, LV_SYMBOL_VOLUME_MID);
@@ -276,11 +293,22 @@ void app_hid_ctrl(void)
 
     lv_obj_t * btn2 = lv_btn_create(icon_in_obj);
     lv_obj_add_event_cb(btn2, btn2_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn2, LV_ALIGN_CENTER, 50, 0);
-    lv_obj_set_size(btn2, 80, 80);
+    lv_obj_align(btn2, LV_ALIGN_BOTTOM_LEFT, 5, -5);
+    lv_obj_set_size(btn2, 70, 70);
 
     label = lv_label_create(btn2);
     lv_label_set_text(label, LV_SYMBOL_VOLUME_MAX);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_center(label);
+
+    //静音
+    lv_obj_t * btn3 = lv_btn_create(icon_in_obj);
+    lv_obj_add_event_cb(btn3, btn3_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn3,LV_ALIGN_BOTTOM_MID, 0, -5);
+    lv_obj_set_size(btn3, 70, 70);
+
+    label = lv_label_create(btn3);
+    lv_label_set_text(label, LV_SYMBOL_MUTE);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_center(label);
 
