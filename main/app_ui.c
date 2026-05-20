@@ -112,6 +112,9 @@ void lv_main_page(void)
     lv_label_set_text(main_text_label, "欢迎使用立创实战派开发板");
     lv_obj_align_to(main_text_label, main_obj, LV_ALIGN_TOP_LEFT, 8, 5);
 
+    //显示时间日期
+    clock_create();
+
     // 设置应用图标style
     static lv_style_t btn_style;
     lv_style_init(&btn_style);
@@ -129,7 +132,7 @@ void lv_main_page(void)
     lv_obj_add_style(icon4, &btn_style, 0);
     lv_obj_set_style_bg_color(icon4, lv_color_hex(0xd8b010), 0);
     lv_obj_set_pos(icon4, 15, 147);
-    lv_obj_add_event_cb(icon4, clock_event_handler, LV_EVENT_CLICKED, NULL);
+    //lv_obj_add_event_cb(icon4, clock_event_handler, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * img4 = lv_img_create(icon4);
     LV_IMG_DECLARE(Clock_img);

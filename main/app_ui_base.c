@@ -60,24 +60,31 @@ void clock_event_handler(lv_event_t * e)
     lv_obj_set_style_text_font(label_back, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(label_back, lv_color_hex(0xffffff), 0);
     lv_obj_align(label_back, LV_ALIGN_CENTER, -10, 0);
+}
 
+void clock_create(void)
+{
     /* Clock page labels are independent from the main page labels. */
-    clock_time_label = lv_label_create(icon_in_obj);
-    lv_obj_set_style_text_font(clock_time_label, &lv_font_montserrat_24, 0);
+    clock_time_label = lv_label_create(main_obj);
+    lv_obj_set_style_text_font(clock_time_label, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(clock_time_label, lv_color_hex(0x000000), 0);
-    lv_obj_align(clock_time_label, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_align(clock_time_label, LV_ALIGN_TOP_LEFT, 10, 50);
 
-    clock_date_label = lv_label_create(icon_in_obj);
+    clock_date_label = lv_label_create(main_obj);
     lv_obj_set_style_text_font(clock_date_label, &font_alipuhui20, 0);
     lv_obj_set_style_text_color(clock_date_label, lv_color_hex(0x000000), 0);
-    lv_obj_align(clock_date_label, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_align_to(clock_date_label,clock_time_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
 
     /* Show current system time once before the WiFi timer refreshes it. */
     time_t now;
     struct tm timeinfo;
     time(&now);
     localtime_r(&now, &timeinfo);
-    lv_label_set_text_fmt(clock_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    lv_label_set_text_fmt(clock_time_label, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
     lv_label_set_text_fmt(clock_date_label, "%d" "\xE5\xB9\xB4" "%02d" "\xE6\x9C\x88" "%02d" "\xE6\x97\xA5",
                           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+
+     // 主页面创建后立即刷新时间，未联网时也让1970时间继续走动。
+    time_update_timer_start();
 }
+

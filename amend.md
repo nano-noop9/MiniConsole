@@ -54,6 +54,33 @@
 - PSRAM 很空并不代表内部 DRAM 可以完全释放。DMA buffer、WiFi/BLE controller、任务栈、驱动内部结构等仍主要依赖内部 DRAM；PSRAM 更适合放大图片、音频缓存、摄像头帧缓冲、较大的业务缓存等。
 - 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录；用户通过 `idf.py -p COM11 app-flash monitor` 验证 BLE HID 行为和日志。
 
+## 9. Clock 页面与 WiFi 时间显示修复
+
+- 新增 `main/app_ui_base.c` 作为主页 Clock 应用页面，实现独立的时钟页面 UI。
+- 修复点击主页 Clock 应用后重启的问题：
+  - 根因是 `clock_time_label` 声明后没有创建，就被传入 LVGL 样式设置函数。
+  - Clock 页面改用独立的 `clock_date_label` / `clock_time_label`，避免覆盖 WiFi 时间标签。
+- app 页面顶层时间标签改名并拆分职责：
+  - 原 `date_label` / `time_label` 改为 `main_date_label` / `main_time_label`。
+  - WiFi 定时器负责刷新 app 顶层时间，同时在 Clock 页面打开时刷新 Clock 页面时间。
+- 修复退出 app 层再进入后日期丢失的问题：
+  - 原因是 `app_obj` 删除后，其子对象日期和时间标签也会一起删除。
+  - 重新进入 `lv_app_page()` 时只重建时间 label，不再重新创建 SNTP 取时任务。
+  - SNTP 同步任务只在 WiFi 连接成功后创建一次，避免重复同步和重复创建 LVGL 定时器。
+- 当前发现 `main_time_label` 和 `main_date_label` 重叠的原因：
+  - `main_time_label` 使用 `lv_obj_align_to(main_date_label, ...)` 时，日期 label 尚未设置文本，LVGL 计算到的日期宽度偏小。
+  - 后续应先设置日期文本，再对齐时间 label；定时刷新日期后也应重新对齐时间 label。
+- 日志 `Waiting for system time to be set...` 表示 WiFi 已连接，但 SNTP 还没完成校时，不属于 UI bug。
+  - 如果该日志短时间内出现后停止，属于正常等待。
+  - 如果长期不停止，需要检查 NTP 服务器、DNS 或外网访问，例如 `cn.pool.ntp.org` 是否可达。
+- 后续建议验证：
+  - 联网成功后 app 顶层能显示日期和时间。
+  - 退出 app 层再进入，日期和时间仍能重新显示。
+  - 点击主页 Clock 应用不再重启。
+  - Clock 页面打开时能显示独立日期和时间。
+  - 观察 SNTP 日志，短时间打印 `Waiting for system time to be set...` 属于正常等待。
+- 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录，只做了静态检查和代码路径分析。
+
 以下内容基于源工程整理，只记录本轮主要改动点，方便后续回看。
 
 ## 1. UI 文件模块拆分

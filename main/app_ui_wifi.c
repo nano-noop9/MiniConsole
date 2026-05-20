@@ -460,6 +460,16 @@ void value_update_cb(lv_timer_t * timer)
     }
 }
 
+void time_update_timer_start(void)
+{
+    // 未联网时也启动定时器，让1970默认时间继续走动。
+    if(time_update_timer == NULL)
+    {
+        time_update_timer = lv_timer_create(value_update_cb, 1000, NULL);
+    }
+}
+
+
 // 获得日期时间 任务函数
 static void get_time_task(void *pvParameters)
 {
@@ -487,10 +497,7 @@ static void get_time_task(void *pvParameters)
 
     lvgl_port_lock(0);
     app_time_label_create();
-    if(time_update_timer == NULL)
-    {
-        time_update_timer = lv_timer_create(value_update_cb, 1000, NULL);  // 创建一个lv_timer 每秒更新一次时间
-    }
+    time_update_timer_start();
     lvgl_port_unlock();
 
     
