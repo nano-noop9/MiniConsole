@@ -128,7 +128,7 @@ void lv_main_page(void)
     lv_obj_add_style(icon4, &btn_style, 0);
     lv_obj_set_style_bg_color(icon4, lv_color_hex(0xd8b010), 0);
     lv_obj_set_pos(icon4, 15, 147);
-    lv_obj_add_event_cb(icon4, camera_event_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(icon4, clock_event_handler, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * img4 = lv_img_create(icon4);
     LV_IMG_DECLARE(Clock_img);
@@ -140,7 +140,7 @@ void lv_main_page(void)
     lv_obj_add_style(icon5, &btn_style, 0);
     lv_obj_set_style_bg_color(icon5, lv_color_hex(0xcd5c5c), 0);
     lv_obj_set_pos(icon5, 120, 147);
-    lv_obj_add_event_cb(icon5, wifiset_event_handler, LV_EVENT_CLICKED, NULL);
+    //lv_obj_add_event_cb(icon5, weather_event_handler, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * img5 = lv_img_create(icon5);
     LV_IMG_DECLARE(weather_img);

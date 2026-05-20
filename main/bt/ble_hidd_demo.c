@@ -14,6 +14,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_err.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
 
@@ -53,6 +54,10 @@
 
 static uint16_t hid_conn_id = 0;
 static bool sec_conn = false;
+static bool bt_hid_started = false;
+static bool bt_adv_started = false;
+static bool bt_hid_stopping = false;
+static bool classic_bt_mem_released = false;
 
 #define CHAR_DECLARATION_SIZE   (sizeof(uint8_t))
 
@@ -92,6 +97,15 @@ static esp_ble_adv_params_t hidd_adv_params = {
     .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
 };
 
+static void hidd_start_advertising(void)
+{
+    esp_err_t ret = esp_ble_gap_start_advertising(&hidd_adv_params);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "start advertising failed: %s", esp_err_to_name(ret));
+    }
+}
+
 
 static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param)
 {
@@ -99,9 +113,17 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         case ESP_HIDD_EVENT_REG_FINISH: {
             if (param->init_finish.state == ESP_HIDD_INIT_OK) {
                 //esp_bd_addr_t rand_addr = {0x04,0x11,0x11,0x11,0x11,0x05};
-                esp_ble_gap_set_device_name(HIDD_DEVICE_NAME);
-                esp_ble_gap_config_adv_data(&hidd_adv_data);
-
+                esp_err_t ret = esp_ble_gap_set_device_name(HIDD_DEVICE_NAME);
+                if(ret != ESP_OK)
+                {
+                    ESP_LOGE(HID_DEMO_TAG, "set device name failed: %s", esp_err_to_name(ret));
+                    break;
+                }
+                ret = esp_ble_gap_config_adv_data(&hidd_adv_data);
+                if(ret != ESP_OK)
+                {
+                    ESP_LOGE(HID_DEMO_TAG, "config adv data failed: %s", esp_err_to_name(ret));
+                }
             }
             break;
         }
@@ -118,7 +140,10 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         case ESP_HIDD_EVENT_BLE_DISCONNECT: {
             sec_conn = false;
             ESP_LOGI(HID_DEMO_TAG, "ESP_HIDD_EVENT_BLE_DISCONNECT");
-            esp_ble_gap_start_advertising(&hidd_adv_params);
+            if(!bt_hid_stopping)
+            {
+                hidd_start_advertising();
+            }
             break;
         }
         case ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT: {
@@ -141,7 +166,28 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 {
     switch (event) {
     case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-        esp_ble_gap_start_advertising(&hidd_adv_params);
+        if(param->adv_data_cmpl.status != ESP_BT_STATUS_SUCCESS)
+        {
+            ESP_LOGE(HID_DEMO_TAG, "adv data set failed, status = %d", param->adv_data_cmpl.status);
+            break;
+        }
+        hidd_start_advertising();
+        break;
+    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+        if(param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS)
+        {
+            bt_adv_started = true;
+            ESP_LOGI(HID_DEMO_TAG, "advertising started");
+        }
+        else
+        {
+            bt_adv_started = false;
+            ESP_LOGE(HID_DEMO_TAG, "advertising start failed, status = %d", param->adv_start_cmpl.status);
+        }
+        break;
+    case ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT:
+        bt_adv_started = false;
+        ESP_LOGI(HID_DEMO_TAG, "advertising stopped, status = %d", param->adv_stop_cmpl.status);
         break;
      case ESP_GAP_BLE_SEC_REQ_EVT:
         for(int i = 0; i < ESP_BD_ADDR_LEN; i++) {
@@ -171,40 +217,92 @@ void bt_hid_start(void)
 {
     esp_err_t ret;
 
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+    if(bt_hid_started)
+    {
+        ESP_LOGW(HID_DEMO_TAG, "BLE HID already started");
+        return;
+    }
+
+    if(!classic_bt_mem_released)
+    {
+        ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+        if(ret != ESP_OK && ret != ESP_ERR_INVALID_STATE)
+        {
+            ESP_LOGE(HID_DEMO_TAG, "release classic bt memory failed: %s", esp_err_to_name(ret));
+            return;
+        }
+        classic_bt_mem_released = true;
+    }
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ret = esp_bt_controller_init(&bt_cfg);
-    if (ret) {
-        ESP_LOGE(HID_DEMO_TAG, "%s initialize controller failed\n", __func__);
+    if(ret)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret) {
-        ESP_LOGE(HID_DEMO_TAG, "%s enable controller failed\n", __func__);
+    if(ret)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+        esp_bt_controller_deinit();
         return;
     }
 
     ret = esp_bluedroid_init();
-    if (ret) {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed\n", __func__);
+    if(ret)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed: %s", __func__, esp_err_to_name(ret));
+        esp_bt_controller_disable();
+        esp_bt_controller_deinit();
         return;
     }
 
     ret = esp_bluedroid_enable();
-    if (ret) {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed\n", __func__);
+    if(ret)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "%s enable bluedroid failed: %s", __func__, esp_err_to_name(ret));
+        esp_bluedroid_deinit();
+        esp_bt_controller_disable();
+        esp_bt_controller_deinit();
         return;
     }
 
-    if((ret = esp_hidd_profile_init()) != ESP_OK) {
-        ESP_LOGE(HID_DEMO_TAG, "%s init bluedroid failed\n", __func__);
+    if((ret = esp_hidd_profile_init()) != ESP_OK)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "%s init hidd profile failed: %s", __func__, esp_err_to_name(ret));
+        esp_bluedroid_disable();
+        esp_bluedroid_deinit();
+        esp_bt_controller_disable();
+        esp_bt_controller_deinit();
+        return;
     }
 
     ///register the callback function to the gap module
-    esp_ble_gap_register_callback(gap_event_handler);
-    esp_hidd_register_callbacks(hidd_event_callback);
+    ret = esp_ble_gap_register_callback(gap_event_handler);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "register gap callback failed: %s", esp_err_to_name(ret));
+        esp_hidd_profile_deinit();
+        esp_bluedroid_disable();
+        esp_bluedroid_deinit();
+        esp_bt_controller_disable();
+        esp_bt_controller_deinit();
+        return;
+    }
+
+    ret = esp_hidd_register_callbacks(hidd_event_callback);
+    if(ret != ESP_OK)
+    {
+        ESP_LOGE(HID_DEMO_TAG, "register hidd callback failed: %s", esp_err_to_name(ret));
+        esp_hidd_profile_deinit();
+        esp_bluedroid_disable();
+        esp_bluedroid_deinit();
+        esp_bt_controller_disable();
+        esp_bt_controller_deinit();
+        return;
+    }
 
     /* set the security iocap & auth_req & key size & init key response key parameters to the stack*/
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;     //bonding with peer device after authentication
@@ -221,6 +319,8 @@ void bt_hid_start(void)
     and the init key means which key you can distribute to the slave. */
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
+
+    bt_hid_started = true;
 }
 
 static void btn3_event_handler(lv_event_t * e)
@@ -320,10 +420,28 @@ void app_hid_ctrl(void)
 // 关闭蓝牙 
 void bt_hid_end(void)
 {
+    if(!bt_hid_started)
+    {
+        return;
+    }
+
+    bt_hid_stopping = true;
+
+    if(bt_adv_started)
+    {
+        esp_ble_gap_stop_advertising();
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
     esp_hidd_profile_deinit();
     vTaskDelay(10 / portTICK_PERIOD_MS);
     esp_bluedroid_disable();
     esp_bluedroid_deinit();
     esp_bt_controller_disable();
     esp_bt_controller_deinit();
+    bt_hid_started = false;
+    bt_adv_started = false;
+    bt_hid_stopping = false;
+    sec_conn = false;
+    hid_conn_id = 0;
 }

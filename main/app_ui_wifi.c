@@ -367,8 +367,8 @@ static void list_btn_cb(lv_event_t * e)
 
 }
 
-lv_obj_t * date_label;
-lv_obj_t * time_label;
+lv_obj_t * main_date_label;
+lv_obj_t * main_time_label;
 
 time_t now;
 struct tm timeinfo;
@@ -376,15 +376,51 @@ struct tm timeinfo;
 // 更新时间函数
 void value_update_cb(lv_timer_t * timer)
 {
+    (void)timer;
+
     // 更新日期 星期 时分秒
     time(&now);
     localtime_r(&now, &timeinfo);
-    lv_label_set_text_fmt(time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    lv_label_set_text_fmt(date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
+    if(main_time_label != NULL && lv_obj_is_valid(main_time_label))
+    {
+        lv_label_set_text_fmt(main_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    }
+    else
+    {
+        main_time_label = NULL;
+    }
+
+    if(main_date_label != NULL && lv_obj_is_valid(main_date_label))
+    {
+        lv_label_set_text_fmt(main_date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
+    }
+    else
+    {
+        main_date_label = NULL;
+    }
+
+    // clock页面打开时刷新页面内时间，关闭后自动跳过。
+    if(clock_time_label != NULL && lv_obj_is_valid(clock_time_label))
+    {
+        lv_label_set_text_fmt(clock_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    }
+    else
+    {
+        clock_time_label = NULL;
+    }
+
+    if(clock_date_label != NULL && lv_obj_is_valid(clock_date_label))
+    {
+        lv_label_set_text_fmt(clock_date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
+    }
+    else
+    {
+        clock_date_label = NULL;
+    }
 }
 
 // 获得日期时间 任务函数
-static void get_time_task(void *pvParameters)
+void get_time_task(void *pvParameters)
 {
     xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
@@ -406,20 +442,19 @@ static void get_time_task(void *pvParameters)
     localtime_r(&now, &timeinfo);
 
     lvgl_port_lock(0);
-    lv_obj_del(main_text_label); // 删除主页的欢迎语 
     // 显示年月日
-    date_label = lv_label_create(app_obj);
-    lv_obj_set_style_text_font(date_label, &font_alipuhui20, 0);
-    lv_obj_set_style_text_color(date_label, lv_color_hex(0xffffff), 0); 
-    lv_label_set_text_fmt(date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
-    lv_obj_align(date_label, LV_ALIGN_TOP_LEFT, 10, 5);
+    main_date_label = lv_label_create(app_obj);
+    lv_obj_set_style_text_font(main_date_label, &font_alipuhui20, 0);
+    lv_obj_set_style_text_color(main_date_label, lv_color_hex(0xffffff), 0);
+    lv_label_set_text_fmt(main_date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
+    lv_obj_align(main_date_label, LV_ALIGN_TOP_LEFT, 10, 5);
 
     // 显示时间  小时:分钟:秒钟
-    time_label = lv_label_create(app_obj);
-    lv_obj_set_style_text_font(time_label, &font_alipuhui20, 0);
-    lv_obj_set_style_text_color(time_label, lv_color_hex(0xffffff), 0); 
-    lv_label_set_text_fmt(time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    lv_obj_align_to(time_label, date_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+    main_time_label = lv_label_create(app_obj);
+    lv_obj_set_style_text_font(main_time_label, &font_alipuhui20, 0);
+    lv_obj_set_style_text_color(main_time_label, lv_color_hex(0xffffff), 0);
+    lv_label_set_text_fmt(main_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    lv_obj_align_to(main_time_label, main_date_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
     lvgl_port_unlock();
 
     xEventGroupSetBits(s_wifi_event_group, WIFI_GET_SNTP_BIT);

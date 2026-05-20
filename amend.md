@@ -21,6 +21,39 @@
   - 只有引用计数归零时才真正执行 `esp_vfs_fat_sdcard_unmount()`。
 - 这样音乐播放器和 SD 卡 app 可以共享同一次 SD 卡挂载，SD 卡页面退出不会中断后台音乐播放。
 
+## 8. BLE HID 广播、连接能力与退出流程修复
+
+- 修复 BLE HID 启动后广播失败的问题。故障日志表现为 `Feature Config ... CONNECT:0`，随后出现 `bta_dm_ble_set_adv_params_all(), fail to set ble adv params.`、`hci write adv params error 0x12` 和 `advertising start failed, status = 13`。
+- 根因是 HID 当前使用 `ADV_TYPE_IND` 可连接广播，但蓝牙 controller 编译配置中 BLE connection feature 未启用。ESP-IDF 5.2.6 下需要开启 `CONFIG_BT_CTRL_BLE_MASTER=y`，该选项虽然名字带 `MASTER`，实际说明为启用 BLE connection feature；未开启时不建议使用 connectable ADV。
+- 蓝牙内存配置增加：
+  - `CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST=y`：让蓝牙优先从 PSRAM 分配可外置的内存，降低内部 DRAM 压力。
+  - `CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY=y`：启用 BLE 动态环境内存，减少固定占用。
+  - `CONFIG_BT_CTRL_BLE_MASTER=y`：启用 BLE connection feature，使 HID 可连接广播能够正常设置并启动。
+- 初始异常时内部 DRAM 非常紧张，曾出现 `Free: 6351 bytes`、`DRAM_Largest_block: 3200 bytes`、`DRAM Used: 97.49%`。配置优化后，蓝牙关闭时 DRAM 可恢复到约 `145KB free`；蓝牙运行时仍会占用较多内部 DRAM，需要继续关注 `DRAM Free` 和 `DRAM_Largest_block`。
+- `main/bt/ble_hidd_demo.c` 增加 BLE HID 启停状态保护：
+  - `bt_hid_started`：避免重复进入蓝牙页面时重复初始化 controller、Bluedroid 和 HID profile。
+  - `bt_adv_started`：记录广播是否已经启动，用于退出时判断是否需要停止广播。
+  - `bt_hid_stopping`：退出蓝牙页面时标记正在关闭，阻止断连回调再次启动广播。
+  - `classic_bt_mem_released`：避免重复调用 `esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT)`。
+- 新增 `hidd_start_advertising()` 统一封装 `esp_ble_gap_start_advertising()`，并检查返回值。这样广播失败时会打印明确的 ESP 错误名，而不是只依赖底层 HCI 日志。
+- BLE GAP 回调增加广播状态日志：
+  - `ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT`：检查广播数据配置是否成功，成功后再启动广播。
+  - `ESP_GAP_BLE_ADV_START_COMPLETE_EVT`：记录广播启动成功或失败，并同步 `bt_adv_started`。
+  - `ESP_GAP_BLE_ADV_STOP_COMPLETE_EVT`：记录广播停止结果，并清除 `bt_adv_started`。
+- 启动阶段增加返回值检查：
+  - 检查 `esp_ble_gap_set_device_name()` 和 `esp_ble_gap_config_adv_data()`。
+  - 检查 `esp_ble_gap_register_callback()` 和 `esp_hidd_register_callbacks()`。
+  - 检查 controller、Bluedroid、HID profile 初始化/启用结果。
+- 初始化失败路径补充清理逻辑，避免 controller、Bluedroid 或 HID profile 半初始化后残留状态，影响下一次进入蓝牙页面。
+- 退出蓝牙页面时，`bt_hid_end()` 会先设置 `bt_hid_stopping = true`，再停止广播并 deinit HID/Bluedroid/controller。这样连接断开回调收到 `ESP_HIDD_EVENT_BLE_DISCONNECT` 时不会再次调用 `hidd_start_advertising()`。
+- 验证结果：
+  - BLE HID 广播和连接已恢复正常。
+  - 退出蓝牙页面时不再出现 `advertising start failed, status = 13`。
+  - 退出时剩余 `disconnect`、`disc complete`、`BTA_DISABLE_DELAY set to 200 ms` 属于蓝牙栈主动断开连接和延迟 disable 的正常日志。
+- 当前蓝牙生命周期仍然是“进入蓝牙页面启动，退出蓝牙页面关闭”，不是蓝牙常开。如果后续要改成蓝牙常开，应改为开机或进入主界面后启动一次 `bt_hid_start()`，退出蓝牙页面只删除 UI，不再调用 `bt_hid_end()`。
+- PSRAM 很空并不代表内部 DRAM 可以完全释放。DMA buffer、WiFi/BLE controller、任务栈、驱动内部结构等仍主要依赖内部 DRAM；PSRAM 更适合放大图片、音频缓存、摄像头帧缓冲、较大的业务缓存等。
+- 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录；用户通过 `idf.py -p COM11 app-flash monitor` 验证 BLE HID 行为和日志。
+
 以下内容基于源工程整理，只记录本轮主要改动点，方便后续回看。
 
 ## 1. UI 文件模块拆分
