@@ -24,6 +24,7 @@ static void app_back_cb(lv_event_t * e)
     {
         lv_obj_del(app_obj); // 删除应用界面
         app_obj = NULL;
+        app_time_label_clear();
     }
 }
 
@@ -201,6 +202,8 @@ void lv_app_page(void)
     lv_obj_set_style_text_font(label_back, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(label_back, lv_color_hex(0xffffff), 0); 
     lv_obj_align(label_back, LV_ALIGN_CENTER, -10, 0);
+
+    app_time_label_create();
 
     // 显示右上角符号
     lv_obj_t * sylbom_label = lv_label_create(app_obj);

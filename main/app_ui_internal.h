@@ -25,3 +25,5 @@ void btset_event_handler(lv_event_t * e);
 
 void clock_event_handler(lv_event_t * e);
 void value_update_cb(lv_timer_t * timer);
+void app_time_label_create(void);
+void app_time_label_clear(void);

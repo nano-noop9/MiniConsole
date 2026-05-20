@@ -372,6 +372,47 @@ lv_obj_t * main_time_label;
 
 time_t now;
 struct tm timeinfo;
+static bool time_synced = false;
+static lv_timer_t * time_update_timer = NULL;
+
+void app_time_label_clear(void)
+{
+    main_date_label = NULL;
+    main_time_label = NULL;
+}
+
+void app_time_label_create(void)
+{
+    if(app_obj == NULL || time_synced == false)
+    {
+        return;
+    }
+
+    time(&now);
+    localtime_r(&now, &timeinfo);
+
+    if(main_date_label == NULL || lv_obj_is_valid(main_date_label) == false)
+    {
+        // 重新进入app页面时，app_obj已重建，需要重新创建日期标签。
+        main_date_label = lv_label_create(app_obj);
+        lv_obj_set_style_text_font(main_date_label, &font_alipuhui20, 0);
+        lv_obj_set_style_text_color(main_date_label, lv_color_hex(0xffffff), 0);
+        lv_obj_align(main_date_label, LV_ALIGN_TOP_LEFT, 10, 5);
+    }
+
+    lv_label_set_text_fmt(main_date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
+
+    if(main_time_label == NULL || lv_obj_is_valid(main_time_label) == false)
+    {
+        // 时间标签跟随当前app_obj生命周期，不能复用已删除页面里的旧对象。
+        main_time_label = lv_label_create(app_obj);
+        lv_obj_set_style_text_font(main_time_label, &font_alipuhui20, 0);
+        lv_obj_set_style_text_color(main_time_label, lv_color_hex(0xffffff), 0);
+        lv_obj_align_to(main_time_label, main_date_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+    }
+
+    lv_label_set_text_fmt(main_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+}
 
 // 更新时间函数
 void value_update_cb(lv_timer_t * timer)
@@ -420,7 +461,7 @@ void value_update_cb(lv_timer_t * timer)
 }
 
 // 获得日期时间 任务函数
-void get_time_task(void *pvParameters)
+static void get_time_task(void *pvParameters)
 {
     xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
@@ -441,25 +482,17 @@ void get_time_task(void *pvParameters)
     time(&now);
     localtime_r(&now, &timeinfo);
 
-    lvgl_port_lock(0);
-    // 显示年月日
-    main_date_label = lv_label_create(app_obj);
-    lv_obj_set_style_text_font(main_date_label, &font_alipuhui20, 0);
-    lv_obj_set_style_text_color(main_date_label, lv_color_hex(0xffffff), 0);
-    lv_label_set_text_fmt(main_date_label, "%d年%02d月%02d日", timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday);
-    lv_obj_align(main_date_label, LV_ALIGN_TOP_LEFT, 10, 5);
-
-    // 显示时间  小时:分钟:秒钟
-    main_time_label = lv_label_create(app_obj);
-    lv_obj_set_style_text_font(main_time_label, &font_alipuhui20, 0);
-    lv_obj_set_style_text_color(main_time_label, lv_color_hex(0xffffff), 0);
-    lv_label_set_text_fmt(main_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    lv_obj_align_to(main_time_label, main_date_label, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
-    lvgl_port_unlock();
-
+    time_synced = true;
     xEventGroupSetBits(s_wifi_event_group, WIFI_GET_SNTP_BIT);
 
-    lv_timer_create(value_update_cb, 1000, NULL);  // 创建一个lv_timer 每秒更新一次时间
+    lvgl_port_lock(0);
+    app_time_label_create();
+    if(time_update_timer == NULL)
+    {
+        time_update_timer = lv_timer_create(value_update_cb, 1000, NULL);  // 创建一个lv_timer 每秒更新一次时间
+    }
+    lvgl_port_unlock();
+
     
     vTaskDelete(NULL);
 }
