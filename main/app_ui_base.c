@@ -1,20 +1,123 @@
 #include "app_ui_internal.h"
+#include <stdbool.h>
 #include <time.h>
 #include <sys/time.h>
 
 lv_obj_t *clock_date_label;
 lv_obj_t *clock_time_label;
 
+static lv_obj_t *stopwatch_label; //秒表显示标签
+static lv_obj_t *stopwatch_start_label; //开始暂停按钮
+static lv_timer_t *stopwatch_timer; //50ms定时器标签
+static uint32_t stopwatch_elapsed_ms; //记录累计时间
+static uint32_t stopwatch_start_tick; //记录当前的 lv_tick_get()
+static bool stopwatch_running;
+
+#define STOPWATCH_REFRESH_MS 50
+
+static void stopwatch_update_label(void) //这里写出来方便其他地方调用
+{
+    if(stopwatch_label == NULL)
+    {
+        return;
+    }
+
+    uint32_t show_ms = stopwatch_elapsed_ms;
+    if(stopwatch_running)
+    {
+        show_ms += lv_tick_elaps(stopwatch_start_tick);
+    }
+
+    uint32_t total_seconds = show_ms / 1000;
+    uint32_t minutes = total_seconds / 60;
+    uint32_t seconds = total_seconds % 60;
+    uint32_t centiseconds = (show_ms % 1000) / 10;
+
+    lv_label_set_text_fmt(stopwatch_label, "%02u:%02u.%02u",
+                          (unsigned int)minutes,
+                          (unsigned int)seconds,
+                          (unsigned int)centiseconds);
+}
+
+static void stopwatch_set_start_label(void)
+{
+    if(stopwatch_start_label != NULL)
+    {
+        lv_label_set_text(stopwatch_start_label, stopwatch_running ? "停止" : "开始");
+    }
+}
+
+static void stopwatch_timer_cb(lv_timer_t * timer)
+{
+    (void)timer;
+    stopwatch_update_label();
+}
+
+static void stopwatch_stop_timer(void)
+{
+    if(stopwatch_timer != NULL)
+    {
+        lv_timer_del(stopwatch_timer);
+        stopwatch_timer = NULL;
+    }
+}
+
 static void btn_clock_back_cb(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if(code == LV_EVENT_CLICKED)
     {
+        stopwatch_stop_timer();
         lv_obj_del(icon_in_obj);
         icon_in_obj = NULL;
         clock_date_label = NULL;
         clock_time_label = NULL;
+        stopwatch_label = NULL;
+        stopwatch_start_label = NULL;
+        stopwatch_running = false;
     }
+}
+
+static void btn_reset_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_CLICKED)
+    {
+        // 秒表清零后刷新显示
+        stopwatch_stop_timer();
+        stopwatch_running = false;
+        stopwatch_elapsed_ms = 0;
+        stopwatch_update_label();
+        stopwatch_set_start_label();
+    }
+}
+
+static void btn_start_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code != LV_EVENT_CLICKED)
+    {
+        return;
+    }
+
+    if(stopwatch_running) //把本次运行经过的时间加入累计值，然后停止刷新定时器。
+    {
+        stopwatch_elapsed_ms += lv_tick_elaps(stopwatch_start_tick);
+        stopwatch_running = false;
+        stopwatch_stop_timer();
+    }
+    else //记录开始时间，标记为运行中，并创建定时刷新。
+    {
+        stopwatch_start_tick = lv_tick_get();
+        stopwatch_running = true;
+        if(stopwatch_timer == NULL)
+        {
+            stopwatch_timer = lv_timer_create(stopwatch_timer_cb, STOPWATCH_REFRESH_MS, NULL);
+        }
+    }
+
+    stopwatch_update_label();
+    stopwatch_set_start_label();
 }
 
 void clock_event_handler(lv_event_t * e)
@@ -38,10 +141,10 @@ void clock_event_handler(lv_event_t * e)
     lv_obj_set_size(clock_title, 320, 40);
     lv_obj_set_style_pad_all(clock_title, 0, 0);
     lv_obj_align(clock_title, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_obj_set_style_bg_color(clock_title, lv_color_hex(0xd8b010), 0);
+    lv_obj_set_style_bg_color(clock_title, lv_color_hex(0x87CEEB), 0);
 
     lv_obj_t *clock_title_label = lv_label_create(clock_title);
-    lv_label_set_text(clock_title_label, "\xE6\x97\xB6" "\xE9\x92\x9F");
+    lv_label_set_text(clock_title_label, "秒表");
     lv_obj_set_style_text_color(clock_title_label, lv_color_hex(0xffffff), 0);
     lv_obj_set_style_text_font(clock_title_label, &font_alipuhui20, 0);
     lv_obj_align(clock_title_label, LV_ALIGN_CENTER, 0, 0);
@@ -60,6 +163,40 @@ void clock_event_handler(lv_event_t * e)
     lv_obj_set_style_text_font(label_back, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(label_back, lv_color_hex(0xffffff), 0);
     lv_obj_align(label_back, LV_ALIGN_CENTER, -10, 0);
+
+    //秒表功能
+
+    //秒表显示计时
+    stopwatch_label = lv_label_create(icon_in_obj);
+    lv_obj_set_style_text_font(stopwatch_label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(stopwatch_label, lv_color_hex(0x000000), 0);
+    lv_obj_align(stopwatch_label, LV_ALIGN_CENTER, 0, -20);
+    stopwatch_elapsed_ms = 0;
+    stopwatch_running = false;
+    stopwatch_update_label();
+
+    //秒表复位按钮
+    lv_obj_t *btn_reset = lv_btn_create(icon_in_obj);
+    lv_obj_set_size(btn_reset, 100, 80);
+    lv_obj_align(btn_reset, LV_ALIGN_BOTTOM_RIGHT, -30, -30);
+    lv_obj_add_event_cb(btn_reset, btn_reset_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *reset_label = lv_label_create(btn_reset);
+    lv_label_set_text(reset_label, "清零");
+    lv_obj_set_style_text_font(reset_label, &font_alipuhui20, 0);
+    lv_obj_align(reset_label, LV_ALIGN_CENTER, 0, 0);
+
+
+    //秒表开始/暂停按钮
+    lv_obj_t *start_btn = lv_btn_create(icon_in_obj);
+    lv_obj_set_size(start_btn, 100, 80);
+    lv_obj_align(start_btn, LV_ALIGN_BOTTOM_LEFT, 30, -30);
+    lv_obj_add_event_cb(start_btn, btn_start_cb, LV_EVENT_CLICKED, NULL);
+
+    stopwatch_start_label = lv_label_create(start_btn);
+    lv_label_set_text(stopwatch_start_label, "开始");
+    lv_obj_set_style_text_font(stopwatch_start_label, &font_alipuhui20, 0);
+    lv_obj_align(stopwatch_start_label, LV_ALIGN_CENTER, 0, 0);
 }
 
 void clock_create(void)
@@ -87,4 +224,3 @@ void clock_create(void)
      // 主页面创建后立即刷新时间，未联网时也让1970时间继续走动。
     time_update_timer_start();
 }
-

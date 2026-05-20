@@ -130,9 +130,9 @@ void lv_main_page(void)
     // 创建时钟应用图标
     lv_obj_t *icon4 = lv_btn_create(main_obj);
     lv_obj_add_style(icon4, &btn_style, 0);
-    lv_obj_set_style_bg_color(icon4, lv_color_hex(0xd8b010), 0);
+    lv_obj_set_style_bg_color(icon4, lv_color_hex(0x87CEEB), 0);
     lv_obj_set_pos(icon4, 15, 147);
-    //lv_obj_add_event_cb(icon4, clock_event_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(icon4, clock_event_handler, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * img4 = lv_img_create(icon4);
     LV_IMG_DECLARE(Clock_img);
