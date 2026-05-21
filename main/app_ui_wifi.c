@@ -443,7 +443,7 @@ void value_update_cb(lv_timer_t * timer)
     // clock页面打开时刷新页面内时间，关闭后自动跳过。
     if(clock_time_label != NULL && lv_obj_is_valid(clock_time_label))
     {
-        lv_label_set_text_fmt(clock_time_label, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        lv_label_set_text_fmt(clock_time_label, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
     }
     else
     {

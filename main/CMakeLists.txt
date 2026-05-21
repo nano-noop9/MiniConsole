@@ -16,5 +16,5 @@ idf_component_register(SRCS "esp32_s3_szp.c" "main.c" "app_ui.c" "app_ui_apps.c"
                        INCLUDE_DIRS "."
                        INCLUDE_DIRS "bt")
 
-spiffs_create_partition_image(storage ../spiffs FLASH_IN_PROJECT)
+# spiffs_create_partition_image(storage ../spiffs FLASH_IN_PROJECT)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-unused-const-variable)

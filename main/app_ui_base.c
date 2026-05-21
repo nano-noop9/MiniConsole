@@ -15,6 +15,8 @@ static bool stopwatch_running;
 
 #define STOPWATCH_REFRESH_MS 50
 
+
+/************************************************  秒表功能 **********************************************************/
 static void stopwatch_update_label(void) //这里写出来方便其他地方调用
 {
     if(stopwatch_label == NULL)
@@ -70,8 +72,7 @@ static void btn_clock_back_cb(lv_event_t * e)
         stopwatch_stop_timer();
         lv_obj_del(icon_in_obj);
         icon_in_obj = NULL;
-        clock_date_label = NULL;
-        clock_time_label = NULL;
+        // 这里只关闭秒表页面，主页面时钟标签还在，不能清空它们的指针。
         stopwatch_label = NULL;
         stopwatch_start_label = NULL;
         stopwatch_running = false;
@@ -199,6 +200,8 @@ void clock_event_handler(lv_event_t * e)
     lv_obj_align(stopwatch_start_label, LV_ALIGN_CENTER, 0, 0);
 }
 
+
+/************************************************  主页始时钟功能 **********************************************************/
 void clock_create(void)
 {
     /* Clock page labels are independent from the main page labels. */
@@ -221,6 +224,6 @@ void clock_create(void)
     lv_label_set_text_fmt(clock_date_label, "%d" "\xE5\xB9\xB4" "%02d" "\xE6\x9C\x88" "%02d" "\xE6\x97\xA5",
                           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
 
-     // 主页面创建后立即刷新时间，未联网时也让1970时间继续走动。
+    // 主页面创建后立即刷新时间，未联网时也让1970时间继续走动。
     time_update_timer_start();
 }
