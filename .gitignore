@@ -16,6 +16,9 @@
 # Log files
 *.log
 
+# Local duplicate/generated assets
+/sword.pcm
+
 # Build artifacts and directories
 **/build/
 build/
@@ -65,6 +68,9 @@ env/
 .clangd/
 .ccls-cache/
 compile_commands.json
+
+# Local editor settings
+.vscode/
 
 # Windows specific
 Thumbs.db

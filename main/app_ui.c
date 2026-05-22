@@ -40,12 +40,12 @@ void lv_gui_start(void)
 {
     lvgl_port_lock(0);
     // 显示logo
-    LV_IMG_DECLARE(img_kidd);  // 声明图片
+    LV_IMG_DECLARE(hello_img);  // 声明图片
     lckfb_logo = lv_img_create(lv_scr_act()); // 创建图片对象
-    lv_img_set_src(lckfb_logo, &img_kidd); // 设置图片对象的图片源
+    lv_img_set_src(lckfb_logo, &hello_img); // 设置图片对象的图片源
     lv_obj_align(lckfb_logo, LV_ALIGN_CENTER, 0, 0); // 设置图片位置为屏幕正中心
-    uint16_t zoom_w = (320 * 256) / img_kidd.header.w;
-    uint16_t zoom_h = (240 * 256) / img_kidd.header.h;
+    uint16_t zoom_w = (320 * 256) / hello_img.header.w;
+    uint16_t zoom_h = (240 * 256) / hello_img.header.h;
     uint16_t zoom = zoom_w < zoom_h ? zoom_w : zoom_h;
     if(zoom > 256)
     {

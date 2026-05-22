@@ -1,6 +1,6 @@
 idf_component_register(SRCS "weather_api.c" "esp32_s3_szp.c" "main.c" "app_ui.c" "app_ui_apps.c" "app_ui_music.c" "app_ui_wifi.c" "app_ui_base.c"
                        SRCS "assets/image_lckfb_logo.c"
-                       SRCS "assets/img_kidd.c"
+                       SRCS "assets/hello_img.c"
                        SRCS "assets/img_att_icon.c"
                        SRCS "assets/img_btset_icon.c"
                        SRCS "assets/img_camera_icon.c"

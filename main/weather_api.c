@@ -15,11 +15,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-//具体纬经度(这个显示乐清)
-//https://api.seniverse.com/v3/weather/now.json?key=SmHzaoxeqJTS03qtf&location=28.02:120.81&language=zh-Hans&unit=c
-
-#define WEATHER_NOW_URL "https://api.seniverse.com/v3/weather/now.json?key=SmHzaoxeqJTS03qtf&location=wenzhou&language=zh-Hans&unit=c"
-#define WEATHER_DAILY_URL "https://api.seniverse.com/v3/weather/daily.json?key=SmHzaoxeqJTS03qtf&location=wenzhou&language=zh-Hans&unit=c&start=0&days=3"
+#define WEATHER_NOW_URL "ENTER_YOUR_WEATHER_API_KEY"
+#define WEATHER_DAILY_URL "ENTER_YOUR_WEATHER_API_KEY"
 #define WEATHER_HTTP_OUTPUT_BUFFER 2048
 
 static const char *TAG = "weather_api";

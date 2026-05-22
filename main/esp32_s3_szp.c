@@ -1100,8 +1100,8 @@ void power_music_task(void *pvParameters)
     /* Enable the TX channel */
     ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx_chan));
     
-    //pa_en(1);  // 打开音频输出
-    pa_en(0);
+    pa_en(1);  // 打开音频输出
+    //pa_en(0);
     /* Write music to earphone */
     ret = i2s_channel_write(i2s_tx_chan, data_ptr, music_pcm_end - data_ptr, &bytes_write, portMAX_DELAY);
     if (ret != ESP_OK) {
