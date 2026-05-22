@@ -25,7 +25,9 @@ void btset_event_handler(lv_event_t * e);
 
 void clock_event_handler(lv_event_t * e);
 void value_update_cb(lv_timer_t * timer);
-void clock_create(void);
+void main_clock_create(void);
 void app_time_label_create(void);
 void time_update_timer_start(void);
 void app_time_label_clear(void);
+
+void weather_event_handler(lv_event_t * e);

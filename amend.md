@@ -141,3 +141,26 @@
 - 下拉框中文列表使用 `font_alipuhui20`。
 - 下拉框右侧展开符号使用 `LV_SYMBOL_DOWN`，并单独使用 Montserrat 字体显示，避免符号变成方框。
 - 当前确认可用版本已打 Git 标签：`sd-mp3`。
+
+## 6. 心知天气获取与主页天气显示
+
+- 新增 `main/weather_api.c` / `main/weather_api.h`，用于通过 `esp_http_client` 请求心知天气 API。
+- 当前使用实时天气接口 `WEATHER_NOW_URL`：
+  - 获取 `results[0].location.name` 作为城市。
+  - 从 `results[0].location.path` 中解析省份，例如 `温州,温州,浙江,中国` 解析出 `浙江`。
+  - 获取 `results[0].now.text` 作为天气文字。
+  - 获取 `results[0].now.temperature` 作为当前温度。
+  - 保留终端打印：省份、城市、天气、温度、更新时间。
+- 首页新增天气显示区域：
+  - 在 `lv_main_page()` 的 `//联网获取天气` 位置调用 `main_weather_create()`。
+  - 使用 `main_weather_update()` 在天气请求成功后更新主页显示。
+  - 主页右侧天气布局拆成多个 label，避免大字体温度和单位、提示文字重叠：
+    - `main_weather_temp_label`：大号温度数字。
+    - `main_weather_unit_label`：小号 `°C` 单位。
+    - `main_weather_now_label`：天气文字。
+    - `main_weather_location_label`：省份和城市。
+- `WEATHER_DAILY_URL` 和三天天气预报解析代码暂时保留但注释掉：
+  - 暂不显示最近三天预报。
+  - 注释中保留了按照 `cJSON_Parse()`、`cJSON_GetObjectItem()`、`cJSON_GetArrayItem()` 解析 `results[0].daily[0]` 的教学说明。
+- 当前天气只在联网并完成 SNTP 对时后获取一次，没有做定时刷新。
+- 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录。

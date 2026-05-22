@@ -5,6 +5,8 @@
 
 lv_obj_t *clock_date_label;
 lv_obj_t *clock_time_label;
+static lv_obj_t *main_weather_location_label;
+static lv_obj_t *main_weather_temp_label;
 
 static lv_obj_t *stopwatch_label; //秒表显示标签
 static lv_obj_t *stopwatch_start_label; //开始暂停按钮
@@ -16,7 +18,7 @@ static bool stopwatch_running;
 #define STOPWATCH_REFRESH_MS 50
 
 
-/************************************************  秒表功能 **********************************************************/
+/************************************************  秒表app功能 **********************************************************/
 static void stopwatch_update_label(void) //这里写出来方便其他地方调用
 {
     if(stopwatch_label == NULL)
@@ -201,8 +203,90 @@ void clock_event_handler(lv_event_t * e)
 }
 
 
-/************************************************  主页始时钟功能 **********************************************************/
-void clock_create(void)
+/************************************************  主页天气app功能 *********************************************************/
+
+void weather_event_handler(lv_event_t * e)
+{
+    (void)e;
+
+    static lv_style_t style;
+    lv_style_init(&style);
+    lv_style_set_radius(&style, 10);
+    lv_style_set_bg_opa(&style, LV_OPA_COVER);
+    lv_style_set_bg_color(&style, lv_color_hex(0xffffff));
+    lv_style_set_border_width(&style, 0);
+    lv_style_set_pad_all(&style, 0);
+    lv_style_set_width(&style, 320);
+    lv_style_set_height(&style, 240);
+
+    icon_in_obj = lv_obj_create(lv_scr_act());
+    lv_obj_add_style(icon_in_obj, &style, 0);
+
+    lv_obj_t *weather_title = lv_obj_create(icon_in_obj);
+    lv_obj_set_size(weather_title, 320, 40);
+    lv_obj_set_style_pad_all(weather_title, 0, 0);
+    lv_obj_align(weather_title, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_style_bg_color(weather_title, lv_color_hex(0xcd5c5c), 0);
+
+    lv_obj_t *weather_title_label = lv_label_create(weather_title);
+    lv_label_set_text(weather_title_label, "近日天气");
+    lv_obj_set_style_text_color(weather_title_label, lv_color_hex(0xffffff), 0);
+    lv_obj_set_style_text_font(weather_title_label, &font_alipuhui20, 0);
+    lv_obj_align(weather_title_label, LV_ALIGN_CENTER, 0, 0);
+}
+
+
+/************************************************  主页天气显示 *********************************************************/
+
+void main_weather_create(void)
+{
+    if(main_obj == NULL)
+    {
+        return;
+    }
+
+    if(main_weather_temp_label == NULL || lv_obj_is_valid(main_weather_temp_label) == false)
+    {
+        // 温度和单位一起使用大字体显示。
+        main_weather_temp_label = lv_label_create(main_obj);
+        lv_obj_set_width(main_weather_temp_label, 135);
+        lv_obj_set_style_text_align(main_weather_temp_label, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_style_text_font(main_weather_temp_label, &lv_font_montserrat_48, 0);
+        lv_obj_set_style_text_color(main_weather_temp_label, lv_color_hex(0x000000), 0);
+        lv_obj_align(main_weather_temp_label, LV_ALIGN_TOP_RIGHT, -15, 50);
+        lv_label_set_text(main_weather_temp_label, "--" "\xC2\xB0" "C");
+    }
+
+    if(main_weather_location_label == NULL || lv_obj_is_valid(main_weather_location_label) == false)
+    {
+        // 温度下方显示“省 | 城市     天气”。
+        main_weather_location_label = lv_label_create(main_obj);
+        lv_obj_set_width(main_weather_location_label, 180);
+        lv_obj_set_style_text_align(main_weather_location_label, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_style_text_font(main_weather_location_label, &font_alipuhui20, 0);
+        lv_obj_set_style_text_color(main_weather_location_label, lv_color_hex(0x000000), 0);
+        lv_obj_align(main_weather_location_label, LV_ALIGN_TOP_RIGHT, -10, 102);
+        lv_label_set_text(main_weather_location_label, "-- | --   获取中");
+    }
+}
+
+void main_weather_update(const char *province, const char *city, const char *weather, const char *temperature)
+{
+    lvgl_port_lock(0);
+    main_weather_create();
+
+    if(main_weather_location_label != NULL && main_weather_temp_label != NULL)
+    {
+
+        lv_label_set_text_fmt(main_weather_location_label, "%s | %s   %s", province, city, weather);
+        lv_label_set_text_fmt(main_weather_temp_label, "%s" "\xC2\xB0" "C", temperature);
+    }
+
+    lvgl_port_unlock();
+}
+
+/************************************************  主页时钟显示 **********************************************************/
+void main_clock_create(void)
 {
     /* Clock page labels are independent from the main page labels. */
     clock_time_label = lv_label_create(main_obj);

@@ -8,6 +8,8 @@ void lv_gui_start(void);
 
 /*********************** 主界面 ****************************/
 void lv_main_page(void);
+void main_weather_create(void);
+void main_weather_update(const char *province, const char *city, const char *weather, const char *temperature);
 
 
 /*********************** 音乐播放器 ****************************/

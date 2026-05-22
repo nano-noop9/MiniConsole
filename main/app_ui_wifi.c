@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include "esp_netif_sntp.h"
 #include "esp_sntp.h"
+#include "weather_api.h"
 
 static const char *TAG = "app_ui";
 
@@ -499,6 +500,9 @@ static void get_time_task(void *pvParameters)
     app_time_label_create();
     time_update_timer_start();
     lvgl_port_unlock();
+
+    // 获取时间后开始获取天气信息
+    weather_fetch_start();
 
     
     vTaskDelete(NULL);
