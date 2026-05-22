@@ -164,3 +164,41 @@
   - 注释中保留了按照 `cJSON_Parse()`、`cJSON_GetObjectItem()`、`cJSON_GetArrayItem()` 解析 `results[0].daily[0]` 的教学说明。
 - 当前天气只在联网并完成 SNTP 对时后获取一次，没有做定时刷新。
 - 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录。
+- 
+
+## 10. 天气 App 三日预报显示
+
+- 本次记录的是主页天气图标进入后的天气 App 页面，不是主页右上角实时天气显示。
+- 天气 App 页面由 `main/app_ui_base.c` 中的 `weather_event_handler()` 创建：
+  - 顶层仍使用 `icon_in_obj` 作为 320x240 的应用页面容器。
+  - 顶部创建 `weather_title` 标题栏，标题文字为“近日天气”。
+  - 标题栏左侧增加返回按钮，点击后调用 `btn_weather_back_cb()` 删除 `icon_in_obj` 返回主界面。
+  - 返回时应将 `weather_cont` 置空，避免保留已删除 LVGL 子对象指针。
+- 天气 App 内容区使用 `weather_cont`：
+  - 通过 `lv_obj_create(icon_in_obj)` 创建容器。
+  - `lv_obj_set_size(weather_cont, 300, 185)`，用于在 320x240 页面中避开 40px 标题栏，并容纳三张 `280x55` 天气卡片。
+  - 使用 `lv_obj_set_flex_flow(weather_cont, LV_FLEX_FLOW_COLUMN)` 设置纵向 flex 布局。
+  - 使用 `lv_obj_set_style_pad_row(weather_cont, 5, 0)` 控制卡片间距。
+- 每天天气使用一个 card 显示：
+  - card 由 `weather_card_create()` 创建，尺寸为 `280 x 55`。
+  - 第一行显示日期和白天到夜间天气，例如 `5/22  中雨 → 小雨`。
+  - 第二行显示温度范围、降雨量、湿度，例如 `22~25℃  降雨5.9  湿95%`。
+  - 日期显示通过 `weather_make_short_date()` 从 `YYYY-MM-DD` 转为 `M/D`，让卡片内容更紧凑。
+- 三日天气数据结构定义在 `main/app_ui.h`：
+  - `WEATHER_DAILY_MAX_DAYS` 固定为 3。
+  - `weather_daily_info_t` 保存 `date`、`text_day`、`text_night`、`high`、`low`、`rainfall`、`humidity`。
+- `main/weather_api.c` 中启用三日天气获取：
+  - 使用已有 `WEATHER_DAILY_URL` 请求心知天气三日预报接口。
+  - 在 `weather_fetch_task()` 中，获取实时天气后继续请求三日天气。
+  - `weather_daily_parse_and_update()` 解析 `results[0].daily[0..2]`。
+  - 解析字段包括日期、白天天气、夜间天气、最高温、最低温、降雨量、湿度。
+  - 降雨量使用 `atof()` 转为数字后通过 `snprintf(..., "%.1f", ...)` 保留 1 位小数。
+- 天气 App 页面刷新逻辑：
+  - 解析成功后调用三日天气 UI 更新函数，把数据复制到 `main/app_ui_base.c` 的静态缓存数组。
+  - 缓存存在的原因是天气数据可能先于天气 App 页面获取；页面未打开时先保存数据，用户打开后直接渲染。
+  - `weather_daily_render()` 负责清空 `weather_cont` 并重新创建三张天气卡片。
+  - 如果 `main_weather_daily_count == 0`，页面显示“天气数据获取中”。
+- 命名注意：
+  - 主页实时天气继续由 `main_weather_update()` 更新。
+  - 三日预报属于天气 App 页面，更新函数更合适命名为 `app_weather_daily_update()`，避免误解为主页天气。
+- 本次未主动执行 `idf.py build`、`idf.py flash` 或烧录。

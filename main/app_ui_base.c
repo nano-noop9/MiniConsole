@@ -1,5 +1,7 @@
 #include "app_ui_internal.h"
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -7,6 +9,10 @@ lv_obj_t *clock_date_label;
 lv_obj_t *clock_time_label;
 static lv_obj_t *main_weather_location_label;
 static lv_obj_t *main_weather_temp_label;
+
+static lv_obj_t *weather_cont; //天气卡片容器
+static weather_daily_info_t main_weather_daily[WEATHER_DAILY_MAX_DAYS];// 缓存三日天气，天气页面未打开时先存起来，打开后直接渲染卡片。
+static int main_weather_daily_count;
 
 static lv_obj_t *stopwatch_label; //秒表显示标签
 static lv_obj_t *stopwatch_start_label; //开始暂停按钮
@@ -180,8 +186,10 @@ void clock_event_handler(lv_event_t * e)
 
     //秒表复位按钮
     lv_obj_t *btn_reset = lv_btn_create(icon_in_obj);
+    lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x87CEEB), 0);
     lv_obj_set_size(btn_reset, 100, 80);
-    lv_obj_align(btn_reset, LV_ALIGN_BOTTOM_RIGHT, -30, -30);
+    lv_obj_set_style_radius(btn_reset, 10, 0);
+    lv_obj_align(btn_reset, LV_ALIGN_BOTTOM_RIGHT, -30, -27);
     lv_obj_add_event_cb(btn_reset, btn_reset_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *reset_label = lv_label_create(btn_reset);
@@ -192,8 +200,10 @@ void clock_event_handler(lv_event_t * e)
 
     //秒表开始/暂停按钮
     lv_obj_t *start_btn = lv_btn_create(icon_in_obj);
+    lv_obj_set_style_bg_color(start_btn, lv_color_hex(0x87CEEB), 0);
     lv_obj_set_size(start_btn, 100, 80);
-    lv_obj_align(start_btn, LV_ALIGN_BOTTOM_LEFT, 30, -30);
+    lv_obj_set_style_radius(start_btn, 10, 0);
+    lv_obj_align(start_btn, LV_ALIGN_BOTTOM_LEFT, 30, -27);
     lv_obj_add_event_cb(start_btn, btn_start_cb, LV_EVENT_CLICKED, NULL);
 
     stopwatch_start_label = lv_label_create(start_btn);
@@ -205,10 +215,93 @@ void clock_event_handler(lv_event_t * e)
 
 /************************************************  主页天气app功能 *********************************************************/
 
+// 将 YYYY-MM-DD 转成 M/D，卡片里显示更紧凑
+static void weather_make_short_date(const char *date, char *short_date, size_t short_date_size)
+{
+    if(date != NULL && strlen(date) >= 10)
+    {
+        int month = 0;
+        int day = 0;
+        if(sscanf(date, "%*d-%d-%d", &month, &day) == 2)
+        {
+            snprintf(short_date, short_date_size, "%d/%d", month, day);
+            return;
+        }
+    }
+
+    snprintf(short_date, short_date_size, "--/--");
+}
+
+static void weather_card_create(lv_obj_t *parent, const weather_daily_info_t *daily)
+{
+    char short_date[8];
+    weather_make_short_date(daily->date, short_date, sizeof(short_date));
+
+    lv_obj_t *card = lv_obj_create(parent);
+    lv_obj_set_size(card, 280, 55);
+    lv_obj_set_style_radius(card, 8, 0);
+    lv_obj_set_style_bg_color(card, lv_color_hex(0xfff7f2), 0);
+    lv_obj_set_style_border_color(card, lv_color_hex(0xf1c7b7), 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_shadow_width(card, 0, 0);
+    lv_obj_set_style_pad_all(card, 6, 0);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *line1 = lv_label_create(card);
+    lv_obj_set_style_text_font(line1, &font_alipuhui20, 0);
+    lv_obj_set_style_text_color(line1, lv_color_hex(0x202020), 0);
+    lv_label_set_text_fmt(line1, "%s  %s " "\xE2\x86\x92" " %s", short_date, daily->text_day, daily->text_night);
+    lv_obj_align(line1, LV_ALIGN_TOP_LEFT, 4, 0);
+
+    lv_obj_t *line2 = lv_label_create(card);
+    lv_obj_set_style_text_font(line2, &font_alipuhui20, 0);
+    lv_obj_set_style_text_color(line2, lv_color_hex(0x5f5f5f), 0);
+    lv_label_set_text_fmt(line2, "%s~%s" "\xE2\x84\x83" "  降雨%smm  湿%s%%",
+                          daily->low, daily->high, daily->rainfall, daily->humidity);
+    lv_obj_align(line2, LV_ALIGN_BOTTOM_LEFT, 4, 6);
+}
+
+static void weather_daily_render(void)
+{
+    if(weather_cont == NULL || lv_obj_is_valid(weather_cont) == false)
+    {
+        return;
+    }
+
+    lv_obj_clean(weather_cont);
+
+    if(main_weather_daily_count <= 0)
+    {
+        lv_obj_t *empty_label = lv_label_create(weather_cont);
+        lv_obj_set_style_text_font(empty_label, &font_alipuhui20, 0);
+        lv_obj_set_style_text_color(empty_label, lv_color_hex(0x888888), 0);
+        lv_label_set_text(empty_label, "天气数据获取中");
+        lv_obj_align(empty_label, LV_ALIGN_CENTER, 0, 0);
+        return;
+    }
+
+    for(int i = 0; i < main_weather_daily_count; i++)
+    {
+        weather_card_create(weather_cont, &main_weather_daily[i]);
+    }
+}
+
+static void btn_weather_back_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_CLICKED)
+    {
+        lv_obj_del(icon_in_obj);
+        icon_in_obj = NULL;
+        weather_cont = NULL;
+    }
+}
+
 void weather_event_handler(lv_event_t * e)
 {
     (void)e;
 
+    //顶部样式
     static lv_style_t style;
     lv_style_init(&style);
     lv_style_set_radius(&style, 10);
@@ -233,8 +326,58 @@ void weather_event_handler(lv_event_t * e)
     lv_obj_set_style_text_color(weather_title_label, lv_color_hex(0xffffff), 0);
     lv_obj_set_style_text_font(weather_title_label, &font_alipuhui20, 0);
     lv_obj_align(weather_title_label, LV_ALIGN_CENTER, 0, 0);
+
+    //返回按钮
+    lv_obj_t *btn_back = lv_btn_create(weather_title);
+    lv_obj_align(btn_back, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_size(btn_back, 60, 30);
+    lv_obj_set_style_border_width(btn_back, 0, 0);
+    lv_obj_set_style_pad_all(btn_back, 0, 0);
+    lv_obj_set_style_bg_opa(btn_back, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_shadow_opa(btn_back, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_add_event_cb(btn_back, btn_weather_back_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *label_back = lv_label_create(btn_back);
+    lv_label_set_text(label_back, LV_SYMBOL_LEFT);
+    lv_obj_set_style_text_font(label_back, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label_back, lv_color_hex(0xffffff), 0);
+    lv_obj_align(label_back, LV_ALIGN_CENTER, -10, 0);
+
+    //天气
+    weather_cont = lv_obj_create(icon_in_obj);
+    lv_obj_set_size(weather_cont, 300, 185);
+    lv_obj_align(weather_cont, LV_ALIGN_TOP_MID, 0, 47);
+    lv_obj_set_style_bg_opa(weather_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(weather_cont, 0, 0);
+    lv_obj_set_style_shadow_width(weather_cont, 0, 0);
+    lv_obj_set_style_pad_all(weather_cont, 4, 0);
+    lv_obj_set_style_pad_row(weather_cont, 5, 0);
+    lv_obj_set_flex_flow(weather_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(weather_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(weather_cont, LV_OBJ_FLAG_SCROLLABLE);
+
+    weather_daily_render();
 }
 
+//把weather_api.c 解析出来的三日天气数据，交给 UI 层保存，并在天气页面打开时刷新卡片显示
+void main_weather_daily_update(const weather_daily_info_t daily[], int count)
+{
+    if(daily == NULL || count <= 0)
+    {
+        return;
+    }
+
+    if(count > WEATHER_DAILY_MAX_DAYS)
+    {
+        count = WEATHER_DAILY_MAX_DAYS;
+    }
+
+    lvgl_port_lock(0);
+    memcpy(main_weather_daily, daily, sizeof(weather_daily_info_t) * count);
+    main_weather_daily_count = count;
+    weather_daily_render();
+    lvgl_port_unlock();
+}
 
 /************************************************  主页天气显示 *********************************************************/
 
@@ -284,6 +427,7 @@ void main_weather_update(const char *province, const char *city, const char *wea
 
     lvgl_port_unlock();
 }
+
 
 /************************************************  主页时钟显示 **********************************************************/
 void main_clock_create(void)

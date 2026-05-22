@@ -2,6 +2,8 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "cJSON.h"
@@ -161,16 +163,31 @@ static void weather_now_parse_and_print(const char *json_text)
     cJSON_Delete(root);
 }
 
+static void weather_copy_string(char *dst, size_t dst_size, const char *src)
+{
+    if(dst_size == 0)
+    {
+        return;
+    }
+
+    if(src == NULL)
+    {
+        dst[0] = '\0';
+        return;
+    }
+
+    snprintf(dst, dst_size, "%s", src);
+}
+
 /*
- * 最近三天天气预报解析代码先保留，等后面要显示预报时再打开。
+ * 最近三天天气预报解析代码。。
  * 学习时可以对照 weather_now_parse_and_print()：
  * 先解析根节点，再进入 results[0].daily[0]，最后取 high、low 等字段。
  */
-#if 0
-static void weather_daily_parse_and_print(const char *json_text)
+static void weather_daily_parse_and_update(const char *json_text)
 {
     cJSON *root = cJSON_Parse(json_text);
-    if (root == NULL) {
+    if(root == NULL) {
         ESP_LOGE(TAG, "天气预报JSON解析失败");
         return;
     }
@@ -178,29 +195,65 @@ static void weather_daily_parse_and_print(const char *json_text)
     cJSON *results = cJSON_GetObjectItem(root, "results");
     cJSON *first_result = cJSON_GetArrayItem(results, 0);
     cJSON *daily = cJSON_GetObjectItem(first_result, "daily");
-    cJSON *today = cJSON_GetArrayItem(daily, 0);
-    cJSON *date = cJSON_GetObjectItem(today, "date");
-    cJSON *text_day = cJSON_GetObjectItem(today, "text_day");
-    cJSON *text_night = cJSON_GetObjectItem(today, "text_night");
-    cJSON *high = cJSON_GetObjectItem(today, "high");
-    cJSON *low = cJSON_GetObjectItem(today, "low");
 
-    if (!cJSON_IsString(date) || !cJSON_IsString(text_day) ||
-        !cJSON_IsString(text_night) || !cJSON_IsString(high) || !cJSON_IsString(low)) {
+    if(!cJSON_IsArray(daily)) {
         ESP_LOGE(TAG, "天气预报JSON字段不完整");
         cJSON_Delete(root);
         return;
     }
 
-    ESP_LOGI(TAG, "今日日期: %s", date->valuestring);
-    ESP_LOGI(TAG, "白天天气: %s", text_day->valuestring);
-    ESP_LOGI(TAG, "夜间天气: %s", text_night->valuestring);
-    ESP_LOGI(TAG, "最高温: %s C", high->valuestring);
-    ESP_LOGI(TAG, "最低温: %s C", low->valuestring);
+    weather_daily_info_t daily_info[WEATHER_DAILY_MAX_DAYS] = {0};
+    int daily_count = cJSON_GetArraySize(daily);
+    if(daily_count > WEATHER_DAILY_MAX_DAYS) {
+        daily_count = WEATHER_DAILY_MAX_DAYS;
+    }
+
+    int valid_count = 0;
+    for(int i = 0; i < daily_count; i++) {
+        cJSON *day = cJSON_GetArrayItem(daily, i);
+        cJSON *date = cJSON_GetObjectItem(day, "date");
+        cJSON *text_day = cJSON_GetObjectItem(day, "text_day");
+        cJSON *text_night = cJSON_GetObjectItem(day, "text_night");
+        cJSON *high = cJSON_GetObjectItem(day, "high");
+        cJSON *low = cJSON_GetObjectItem(day, "low");
+        cJSON *rainfall = cJSON_GetObjectItem(day, "rainfall");
+        cJSON *humidity = cJSON_GetObjectItem(day, "humidity");
+
+        if(!cJSON_IsString(date) || !cJSON_IsString(text_day) ||
+           !cJSON_IsString(text_night) || !cJSON_IsString(high) ||
+           !cJSON_IsString(low) || !cJSON_IsString(rainfall) ||
+           !cJSON_IsString(humidity)) {
+            ESP_LOGE(TAG, "第%d天天气预报字段不完整", i + 1);
+            continue;
+        }
+
+        weather_daily_info_t *info = &daily_info[valid_count];
+        weather_copy_string(info->date, sizeof(info->date), date->valuestring);
+        weather_copy_string(info->text_day, sizeof(info->text_day), text_day->valuestring);
+        weather_copy_string(info->text_night, sizeof(info->text_night), text_night->valuestring);
+        weather_copy_string(info->high, sizeof(info->high), high->valuestring);
+        weather_copy_string(info->low, sizeof(info->low), low->valuestring);
+        snprintf(info->rainfall, sizeof(info->rainfall), "%.1f", atof(rainfall->valuestring));
+        weather_copy_string(info->humidity, sizeof(info->humidity), humidity->valuestring);
+
+        ESP_LOGI(TAG, "预报%d: %s %s-%s %s~%s C 降雨%s 湿度%s%%",
+                 i + 1,
+                 info->date,
+                 info->text_day,
+                 info->text_night,
+                 info->low,
+                 info->high,
+                 info->rainfall,
+                 info->humidity);
+        valid_count++;
+    }
+
+    if(valid_count > 0) {
+        main_weather_daily_update(daily_info, valid_count);
+    }
 
     cJSON_Delete(root);
 }
-#endif
 
 
 #define WEATHER_AUTO_UPDATE_ENABLE 0
@@ -228,6 +281,10 @@ static void weather_fetch_task(void *pvParameters)
 #endif
         if (weather_http_get(WEATHER_NOW_URL, response_buffer, sizeof(response_buffer)) == ESP_OK) {
             weather_now_parse_and_print(response_buffer);
+        }
+
+        if (weather_http_get(WEATHER_DAILY_URL, response_buffer, sizeof(response_buffer)) == ESP_OK) {
+            weather_daily_parse_and_update(response_buffer);
         }
 
 #if WEATHER_AUTO_UPDATE_ENABLE
